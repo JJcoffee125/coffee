@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kávový Deník 12.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #mobileMenu { transition: transform 0.3s ease-in-out; }
+        .menu-hidden { transform: translateX(-100%); }
+        .menu-visible { transform: translateX(0); }
+        .modal-transition { transition: opacity 0.2s ease-in-out; }
+        .modal-hidden { opacity: 0; pointer-events: none; }
+        .modal-visible { opacity: 1; pointer-events: auto; }
+        input[type=range] { width: 100%; }
+        .filter-content { transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out; max-height: 0; opacity: 0; overflow: hidden; }
+        .filter-expanded { max-height: 500px; opacity: 1; margin-top: 1rem; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen pb-20">
+
+    <div id="viewLogin" class="fixed inset-0 bg-slate-800 z-[60] flex items-center justify-center block">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm mx-4">
+            <div class="text-center mb-8">
+                <div class="text-5xl mb-4">☕</div>
+                <h1 class="text-2xl font-bold text-amber-800">Kávový Deník</h1>
+                <p class="text-xs text-slate-500 mt-2">v12.0 • Komunita a Pražírny</p>
+            </div>
+            <div class="space-y-5">
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Uživatelské jméno</label>
+                    <input type="text" id="loginUser" value="admin1" placeholder="Např. admin1" class="w-full border-gray-300 border rounded-lg p-3 bg-slate-50 outline-none focus:border-amber-500 font-semibold text-amber-900">
+                </div>
+                <button id="loginBtn" class="w-full bg-amber-600 text-white font-bold py-3 rounded-lg shadow-lg hover:bg-amber-700 transition mt-2">Vstoupit do deníku</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="appContainer" class="hidden">
+        <header class="bg-amber-800 text-white p-4 flex items-center shadow-md relative z-20 sticky top-0">
+            <button id="menuBtn" class="focus:outline-none mr-4">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <h1 id="headerTitle" class="text-xl font-bold">Příprava kávy</h1>
+        </header>
+
+        <nav id="mobileMenu" class="fixed inset-y-0 left-0 bg-white w-64 shadow-2xl z-40 menu-hidden pt-16 px-6 flex flex-col justify-between pb-8">
+            <ul class="space-y-4">
+                <li><button onclick="switchView('prep')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">☕ Nová příprava</button></li>
+                <li><button onclick="switchView('coffees')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">📦 Moje Kávy</button></li>
+                <li><button onclick="switchView('roasters')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🔥 Pražírny</button></li>
+                <li><button onclick="switchView('archive')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🗄️ Archiv extrakcí</button></li>
+            </ul>
+            <button id="logoutBtn" class="w-full flex items-center justify-center space-x-2 text-rose-600 font-bold bg-rose-50 p-3 rounded-lg">
+                <span>Odhlásit se (<span id="loggedUserName"></span>)</span>
+            </button>
+        </nav>
+        <div id="menuOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden"></div>
+
+        <main class="p-4 max-w-md mx-auto mt-2">
+            
+            <div id="viewPrep" class="block">
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <h2 class="text-lg font-bold mb-4 border-b pb-2 text-slate-700">Parametry receptu</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs text-slate-500 block mb-1">Výběr zrna</label>
+                            <select id="coffeeSelect" class="w-full border-gray-300 border rounded-lg p-2 font-semibold"></select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500 block mb-1">Metoda přípravy</label>
+                            <select id="brewMethod" class="w-full border-gray-300 border rounded-lg p-2 bg-white"></select>
+                        </div>
+                        
+                        <div id="methodInfoBox" class="bg-blue-50 border border-blue-100 p-3 rounded-lg text-sm text-blue-800 hidden">
+                            <div class="font-bold mb-1">💡 Doporučené mletí: <span id="methodGrind" class="font-normal"></span></div>
+                            <div class="text-xs opacity-90 italic" id="methodNotes"></div>
+                        </div>
+
+                        <div class="flex space-x-3">
+                            <div class="w-1/2"><label class="text-xs text-slate-500">IN (g)</label><input type="number" step="0.1" id="doseIn" value="15" class="w-full border rounded-lg p-2"></div>
+                            <div class="w-1/2"><label class="text-xs text-slate-500">Poměr (1:X)</label><input type="number" step="0.1" id="ratio" value="16.6" class="w-full border rounded-lg p-2"></div>
+                        </div>
+                        <div class="bg-amber-50 p-3 rounded-lg text-center border border-amber-200">
+                            <span class="text-sm text-slate-500">Cílová hmotnost OUT:</span><br><span id="targetWeightDisplay" class="text-xl font-bold text-amber-800">249.0 g</span>
+                        </div>
+                        <div><label class="text-xs text-slate-500">Cílový čas (s)</label><input type="number" id="targetTime" value="210" class="w-full border rounded-lg p-2"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6 text-center">
+                    <div id="display" class="text-5xl font-mono mb-4 text-slate-700">00:00.0</div>
+                    <div class="flex justify-center space-x-3">
+                        <button id="startBtn" class="bg-emerald-600 text-white px-5 py-2 rounded-lg">Start</button>
+                        <button id="stopBtn" class="bg-rose-600 text-white px-5 py-2 rounded-lg">Stop</button>
+                        <button id="resetBtn" class="bg-slate-500 text-white px-5 py-2 rounded-lg">Reset</button>
+                    </div>
+                </div>
+                <button id="triggerModalBtn" class="w-full bg-amber-600 text-white font-bold py-3 rounded-lg">Dokončit a Hodnotit</button>
+            </div>
+
+            <div id="viewCoffees" class="hidden">
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <h2 class="text-lg font-bold mb-4 border-b pb-2 text-slate-700">Přidat nové zrno</h2>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-xs text-slate-500 block mb-1">Předvolba podle původu (volitelné)</label>
+                            <select id="originPreset" class="w-full border-gray-300 border rounded-lg p-2 text-sm bg-slate-50">
+                                <option value="">Vlastní profil (nevyplňovat)</option>
+                                <option value="Etiopie">Etiopie</option>
+                                <option value="Brazílie">Brazílie</option>
+                                <option value="Keňa">Keňa</option>
+                                <option value="Kolumbie">Kolumbie</option>
+                            </select>
+                        </div>
+                        
+                        <input type="text" id="newCoffeeName" placeholder="Název kávy" class="w-full border rounded-lg p-2">
+                        <select id="newCoffeeRoaster" class="w-full border-gray-300 border rounded-lg p-2 bg-white">
+                            <option value="" disabled selected>Vyberte pražírnu...</option>
+                        </select>
+                        
+                        <div class="bg-slate-50 p-3 rounded-lg border text-sm space-y-1">
+                            <p class="text-xs font-bold text-slate-500 uppercase mb-2">Očekávaný profil zrna</p>
+                            <div class="flex"><span class="w-20">Hořkost</span><input type="range" id="cBitter" min="1" max="10" value="5" class="accent-slate-700"></div>
+                            <div class="flex"><span class="w-20">Acidita</span><input type="range" id="cAcid" min="1" max="10" value="5" class="accent-amber-500"></div>
+                            <div class="flex"><span class="w-20">Sladkost</span><input type="range" id="cSweet" min="1" max="10" value="5" class="accent-pink-500"></div>
+                            <div class="flex"><span class="w-20">Tělo</span><input type="range" id="cBody" min="1" max="10" value="5" class="accent-amber-800"></div>
+                        </div>
+                        <textarea id="cNotes" rows="2" placeholder="Typické tóny (např. ořechy, čokoláda...)" class="w-full border rounded-lg p-2 text-sm"></textarea>
+                        
+                        <button id="saveCoffeeBtn" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg">Uložit do číselníku</button>
+                    </div>
+                </div>
+                <h2 class="text-lg font-bold mb-3 text-slate-700">Uložená zrna</h2>
+                <div id="coffeeList" class="space-y-3"></div>
+            </div>
+
+            <div id="viewRoasters" class="hidden">
+                
+                <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+                    <h2 class="text-lg font-bold mb-4 border-b pb-2 text-slate-700">Nová pražírna</h2>
+                    <div class="space-y-3">
+                        <input type="text" id="newRoasterName" placeholder="Název pražírny" class="w-full border rounded-lg p-2">
+                        <input type="text" id="newRoasterLocation" placeholder="Město / Lokalita" class="w-full border rounded-lg p-2">
+                        <button id="saveRoasterBtn" class="w-full bg-amber-800 hover:bg-amber-900 text-white font-bold py-2 rounded-lg transition">Přidat do seznamu</button>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h2 class="text-lg font-bold text-slate-700">Hodnocení komunity</h2>
+                    <p class="text-sm text-slate-500">Kliknutím na hvězdičku přidáš vlastní hodnocení.</p>
+                </div>
+                <div id="roasterList" class="space-y-3 pb-10"></div>
+            </div>
+
+            <div id="viewArchive" class="hidden">
+                <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+                    <button id="toggleFilterBtn" class="w-full flex justify-between items-center text-slate-700 font-bold uppercase tracking-wide focus:outline-none">
+                        <span class="text-sm">Filtrování</span>
+                        <svg id="filterIcon" class="w-5 h-5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="filterPanel" class="filter-content space-y-3">
+                        <div class="flex space-x-2">
+                            <select id="filterCoffeeName" class="w-1/2 border rounded p-2 text-sm"><option value="all">Všechny kávy</option></select>
+                            <select id="filterRoaster" class="w-1/2 border rounded p-2 text-sm"><option value="all">Všechny pražírny</option></select>
+                        </div>
+                        <div class="flex space-x-2">
+                            <select id="filterMethod" class="w-1/2 border rounded p-2 text-sm">
+                                <option value="all">Všechny metody</option>
+                                <option value="Hario V60">Hario V60</option>
+                                <option value="French Press">French Press</option>
+                                <option value="AeroPress (Inverzní)">AeroPress (Inverzní)</option>
+                                <option value="Espresso">Espresso</option>
+                            </select>
+                            <input type="number" id="filterWeight" placeholder="Dávka IN (g)" class="w-1/2 border rounded p-2 text-sm">
+                        </div>
+                        <input type="text" id="filterNotes" placeholder="Hledat v poznámkách" class="w-full border rounded p-2 text-sm">
+                        <button id="clearFiltersBtn" class="w-full bg-slate-100 text-slate-500 py-2 rounded text-sm">Vymazat filtry</button>
+                    </div>
+                </div>
+                <div id="logList" class="space-y-4"></div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="ratingModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 modal-hidden modal-transition px-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 border-b pb-2">Chuťový profil</h2>
+            <div class="space-y-4">
+                <div class="flex flex-col"><div class="flex justify-between text-sm"><span>Hořkost</span></div><div class="text-[10px] text-slate-400 mb-1 leading-tight">Chuťový vjem vznikající při delší extrakci.</div><input type="range" id="sliderBitter" min="1" max="10" value="5" class="accent-slate-700"></div>
+                <div class="flex flex-col"><div class="flex justify-between text-sm"><span>Acidita</span></div><div class="text-[10px] text-slate-400 mb-1 leading-tight">Nositelka svěžesti, často s ovocnými tóny.</div><input type="range" id="sliderAcid" min="1" max="10" value="5" class="accent-amber-500"></div>
+                <div class="flex flex-col"><div class="flex justify-between text-sm"><span>Sladkost</span></div><div class="text-[10px] text-slate-400 mb-1 leading-tight">Přirozená chuť cukrů (med, karamel).</div><input type="range" id="sliderSweet" min="1" max="10" value="5" class="accent-pink-500"></div>
+                <div class="flex flex-col"><div class="flex justify-between text-sm"><span>Tělo (Hutnost)</span></div><div class="text-[10px] text-slate-400 mb-1 leading-tight">Textura a fyzický pocit hutnosti v ústech.</div><input type="range" id="sliderBody" min="1" max="10" value="5" class="accent-amber-800"></div>
+
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 mt-2">
+                    <div class="flex justify-between items-center text-sm font-semibold text-slate-600 mb-2"><span>Celková spokojenost</span><span id="satEmoji" class="text-2xl">😐</span></div>
+                    <input type="range" id="sliderSatisfaction" min="0" max="100" value="50" style="accent-color: hsl(60, 80%, 45%);">
+                </div>
+                <textarea id="notesInput" rows="2" placeholder="Poznámky k přípravě..." class="w-full border rounded-lg p-2 text-sm"></textarea>
+                <div class="flex space-x-3 mt-4">
+                    <button id="cancelModalBtn" class="w-1/3 bg-slate-200 py-2 rounded-lg">Zpět</button>
+                    <button id="saveFinalBtn" class="w-2/3 bg-emerald-600 text-white font-bold py-2 rounded-lg">Uložit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="editCoffeeModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 modal-hidden modal-transition px-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 border-b pb-2">Upravit Kávu</h2>
+            <input type="hidden" id="editCoffeeId">
+            <div class="space-y-3">
+                <input type="text" id="ecName" class="w-full border rounded-lg p-2 text-sm" placeholder="Název">
+                <select id="ecRoaster" class="w-full border-gray-300 border rounded-lg p-2 bg-white text-sm"></select>
+                
+                <div class="bg-slate-50 p-2 rounded-lg border text-xs space-y-2">
+                    <div class="flex items-center"><span class="w-16">Hořkost</span><input type="range" id="ecBitter" min="1" max="10" class="accent-slate-700"></div>
+                    <div class="flex items-center"><span class="w-16">Acidita</span><input type="range" id="ecAcid" min="1" max="10" class="accent-amber-500"></div>
+                    <div class="flex items-center"><span class="w-16">Sladkost</span><input type="range" id="ecSweet" min="1" max="10" class="accent-pink-500"></div>
+                    <div class="flex items-center"><span class="w-16">Tělo</span><input type="range" id="ecBody" min="1" max="10" class="accent-amber-800"></div>
+                </div>
+                <div><label class="text-xs text-slate-500 block">Typické tóny / Poznámky</label><textarea id="ecNotes" rows="2" class="w-full border rounded p-2 text-sm"></textarea></div>
+                
+                <div class="flex space-x-3 mt-4">
+                    <button onclick="document.getElementById('editCoffeeModal').classList.replace('modal-visible', 'modal-hidden')" class="w-1/3 bg-slate-200 py-2 rounded-lg text-sm">Zrušit</button>
+                    <button onclick="saveEditCoffee()" class="w-2/3 bg-slate-800 text-white font-bold py-2 rounded-lg text-sm">Uložit změny</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="editBrewModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 modal-hidden modal-transition px-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 border-b pb-2">Úprava extrakce</h2>
+            <input type="hidden" id="ebId">
+            <div class="space-y-3">
+                <div class="flex space-x-2">
+                    <div class="w-1/2"><label class="text-xs text-slate-500 block">Dávka IN (g)</label><input type="number" step="0.1" id="ebDoseIn" class="w-full border rounded p-2 text-sm"></div>
+                    <div class="w-1/2"><label class="text-xs text-slate-500 block">Poměr (1:X)</label><input type="number" step="0.1" id="ebRatio" class="w-full border rounded p-2 text-sm"></div>
+                </div>
+                <div><label class="text-xs text-slate-500 block">Čas (00:00.0)</label><input type="text" id="ebTime" class="w-full border rounded p-2 text-sm font-mono"></div>
+                <div class="bg-slate-50 p-3 rounded-lg border text-sm space-y-2 mt-2">
+                    <div class="flex flex-col"><span class="text-xs text-slate-500">Hořkost</span><input type="range" id="ebBitter" min="1" max="10" class="accent-slate-700"></div>
+                    <div class="flex flex-col"><span class="text-xs text-slate-500">Acidita</span><input type="range" id="ebAcid" min="1" max="10" class="accent-amber-500"></div>
+                    <div class="flex flex-col"><span class="text-xs text-slate-500">Sladkost</span><input type="range" id="ebSweet" min="1" max="10" class="accent-pink-500"></div>
+                    <div class="flex flex-col"><span class="text-xs text-slate-500">Tělo</span><input type="range" id="ebBody" min="1" max="10" class="accent-amber-800"></div>
+                </div>
+                <div><label class="text-xs text-slate-500 block">Celková spokojenost (0-100)</label><input type="range" id="ebSatisfaction" min="0" max="100" class="accent-blue-500"></div>
+                <div><label class="text-xs text-slate-500 block">Poznámky</label><textarea id="ebNotes" rows="2" class="w-full border rounded p-2 text-sm"></textarea></div>
+                <div class="flex space-x-3 mt-4">
+                    <button onclick="document.getElementById('editBrewModal').classList.replace('modal-visible', 'modal-hidden')" class="w-1/3 bg-slate-200 py-2 rounded-lg text-sm">Zrušit</button>
+                    <button onclick="saveEditBrew()" class="w-2/3 bg-amber-600 text-white font-bold py-2 rounded-lg text-sm">Uložit úpravy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ZNALOSTNÍ BÁZE A PROFILY ---
+        const kbMethods = {
+            "Hario V60": { dose: 15, ratio: 16.6, time: 210, grind: "střední (jako krystalový cukr)", note: "Nezapomeňte na fázi bloomingu po dobu 30–45 sekund." },
+            "French Press": { dose: 20, ratio: 15.0, time: 240, grind: "hrubé (jako mořská sůl)", note: "Po 4 minutách ihned servírujte pro zastavení louhování." },
+            "AeroPress (Inverzní)": { dose: 18, ratio: 10.5, time: 150, grind: "středně jemné", note: "Doporučen tlak po dobu 90-120 sekund." },
+            "Espresso": { dose: 18, ratio: 2.0, time: 30, grind: "velmi jemné (jako mouka)", note: "Jemné mletí pro uvolnění intenzivního aroma." }
+        };
+
+        const kbProfiles = {
+            "Etiopie": { bitter: 3, acid: 9, sweet: 7, body: 5, notes: "Typické tóny: jasmín, bergamot, citrusy" },
+            "Brazílie": { bitter: 5, acid: 3, sweet: 8, body: 8, notes: "Typické tóny: čokoláda, ořechy, sladké tóny" },
+            "Keňa": { bitter: 4, acid: 10, sweet: 6, body: 6, notes: "Typické tóny: černý rybíz, výrazná acidita" },
+            "Kolumbie": { bitter: 4, acid: 7, sweet: 8, body: 7, notes: "Typické tóny: jablko, lískový oříšek, čokoláda" }
+        };
+
+        // --- PRAŽÍRNY (TOP 10 + Lokální) ---
+        // Nový formát podporující více uživatelů: ratings: { "username": 5, "another": 4 }
+        const defaultRoasters = [
+            { id: 1, name: "Father's Coffee Roastery", location: "Ostrava", ratings: {} },
+            { id: 2, name: "Cafe Eternity", location: "Havířov", ratings: {} },
+            { id: 3, name: "Laura Coffee", location: "Ostrava / Havířov", ratings: {} },
+            { id: 4, name: "Kikafe", location: "Ostrava", ratings: {} },
+            { id: 5, name: "Belko Coffee Roasters", location: "Třinec", ratings: {} },
+            { id: 6, name: "COFFEESPOT", location: "Babice", ratings: {} },
+            { id: 7, name: "Dos Mundos", location: "Praha", ratings: {} },
+            { id: 8, name: "Lázeňská káva", location: "Luhačovice", ratings: {} },
+            { id: 9, name: "Aromaniac", location: "Praha", ratings: {} },
+            { id: 10, name: "Mamacoffee", location: "Praha", ratings: {} }
+        ];
+
+        // --- DATABÁZE A MIGRACE ---
+        let coffees = JSON.parse(localStorage.getItem('db_coffees')) || [];
+        let brews = JSON.parse(localStorage.getItem('db_brews')) || [];
+        let roasters = JSON.parse(localStorage.getItem('db_roasters')) || defaultRoasters;
+
+        // Migrační skript: Pokud existují stará data pražíren s jedním 'rating' jako číslo, převeď ho do objektu
+        roasters = roasters.map(r => {
+            if (typeof r.rating === 'number') {
+                r.ratings = {};
+                if (r.rating > 0) r.ratings['admin1'] = r.rating;
+                delete r.rating;
+            }
+            if (!r.ratings) r.ratings = {};
+            return r;
+        });
+
+        function getCurrentUser() {
+            return localStorage.getItem('currentUser') || 'admin1';
+        }
+
+        // --- AUTH ---
+        function checkAuth() { 
+            if (localStorage.getItem('isLoggedIn') === 'true') { 
+                document.getElementById('loggedUserName').innerText = getCurrentUser();
+                document.getElementById('viewLogin').classList.replace('block', 'hidden'); 
+                document.getElementById('appContainer').classList.replace('hidden', 'block'); 
+                switchView('prep'); 
+            } else { 
+                document.getElementById('viewLogin').classList.replace('hidden', 'block'); 
+                document.getElementById('appContainer').classList.replace('block', 'hidden'); 
+            } 
+        }
+        document.getElementById('loginBtn').addEventListener('click', () => { 
+            const user = document.getElementById('loginUser').value.trim();
+            if(!user) return alert('Zadejte uživatelské jméno.');
+            localStorage.setItem('isLoggedIn', 'true'); 
+            localStorage.setItem('currentUser', user);
+            checkAuth(); 
+        });
+        document.getElementById('logoutBtn').addEventListener('click', () => { 
+            localStorage.removeItem('isLoggedIn'); 
+            checkAuth(); 
+        });
+
+        // --- MENU ---
+        function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('menu-hidden'); document.getElementById('menuOverlay').classList.toggle('hidden'); }
+        document.getElementById('menuBtn').addEventListener('click', toggleMenu); document.getElementById('menuOverlay').addEventListener('click', toggleMenu);
+        
+        function switchView(view) {
+            document.getElementById('viewPrep').style.display = view === 'prep' ? 'block' : 'none';
+            document.getElementById('viewCoffees').style.display = view === 'coffees' ? 'block' : 'none';
+            document.getElementById('viewRoasters').style.display = view === 'roasters' ? 'block' : 'none';
+            document.getElementById('viewArchive').style.display = view === 'archive' ? 'block' : 'none';
+            
+            if(view === 'prep') { document.getElementById('headerTitle').innerText = "Příprava kávy"; refreshCoffeeSelect(); triggerMethodUpdate(); }
+            if(view === 'coffees') { document.getElementById('headerTitle').innerText = "Číselník káv"; updateRoasterSelects(); renderCoffees(); }
+            if(view === 'roasters') { document.getElementById('headerTitle').innerText = "Pražírny"; renderRoasters(); }
+            if(view === 'archive') { document.getElementById('headerTitle').innerText = "Archiv extrakcí"; updateFilters(); renderBrews(); }
+            if(!document.getElementById('mobileMenu').classList.contains('menu-hidden')) toggleMenu();
+        }
+
+        // --- INICIALIZACE METOD ---
+        const brewMethodSelect = document.getElementById('brewMethod');
+        Object.keys(kbMethods).forEach(m => { brewMethodSelect.innerHTML += `<option value="${m}">${m}</option>`; });
+
+        // --- PRAŽÍRNY (Přidávání a Komunitní Hodnocení) ---
+        document.getElementById('saveRoasterBtn').addEventListener('click', () => {
+            const name = document.getElementById('newRoasterName').value.trim();
+            const loc = document.getElementById('newRoasterLocation').value.trim() || 'Neznámá lokalita';
+            if(!name) return alert('Zadejte název pražírny.');
+            
+            roasters.push({ id: Date.now(), name: name, location: loc, ratings: {} });
+            localStorage.setItem('db_roasters', JSON.stringify(roasters));
+            
+            document.getElementById('newRoasterName').value = '';
+            document.getElementById('newRoasterLocation').value = '';
+            renderRoasters();
+            updateRoasterSelects();
+        });
+
+        function renderRoasters() {
+            const list = document.getElementById('roasterList'); list.innerHTML = '';
+            const currentUser = getCurrentUser();
+
+            // Výpočet průměru pro každou pražírnu
+            const roastersWithAvg = roasters.map(r => {
+                const vals = Object.values(r.ratings || {});
+                const avg = vals.length > 0 ? (vals.reduce((a,b)=>a+b,0) / vals.length) : 0;
+                return { ...r, avgRating: avg, count: vals.length };
+            });
+
+            // Řazení podle průměru sestupně
+            const sorted = roastersWithAvg.sort((a, b) => b.avgRating - a.avgRating);
+            
+            sorted.forEach(r => {
+                const userRating = (r.ratings && r.ratings[currentUser]) ? r.ratings[currentUser] : 0;
+                let stars = '';
+                for(let i=1; i<=5; i++) {
+                    stars += `<span onclick="rateRoaster(${r.id}, ${i})" class="cursor-pointer text-3xl transition ${userRating >= i ? 'text-amber-500 drop-shadow-sm' : 'text-slate-200 hover:text-amber-300'}">★</span>`;
+                }
+                
+                list.innerHTML += `
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-slate-800 text-lg">${r.name}</div>
+                            <div class="text-xs text-slate-500 mt-1 flex items-center">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                ${r.location}
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-bold ${r.avgRating > 0 ? 'text-amber-600' : 'text-slate-400'}">${r.avgRating > 0 ? r.avgRating.toFixed(1) + ' ★' : '-'}</div>
+                            <div class="text-[10px] text-slate-400 uppercase tracking-wider">${r.count} ${r.count === 1 ? 'hodnocení' : 'hodnocení'}</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 bg-slate-50 px-3 py-2 rounded flex justify-between items-center border border-slate-100">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Moje hodnocení</span>
+                        <div class="flex space-x-1">${stars}</div>
+                    </div>
+                </div>`;
+            });
+        }
+
+        function rateRoaster(id, rating) {
+            const idx = roasters.findIndex(r => r.id === id);
+            const currentUser = getCurrentUser();
+            if(idx > -1) { 
+                if(!roasters[idx].ratings) roasters[idx].ratings = {};
+                roasters[idx].ratings[currentUser] = rating; 
+                localStorage.setItem('db_roasters', JSON.stringify(roasters)); 
+                renderRoasters(); 
+            }
+        }
+
+        function updateRoasterSelects() {
+            const selNew = document.getElementById('newCoffeeRoaster');
+            const selEdit = document.getElementById('ecRoaster');
+            const options = '<option value="" disabled selected>Vyberte pražírnu...</option>' + [...roasters].sort((a,b)=>a.name.localeCompare(b.name)).map(r => `<option value="${r.name}">${r.name}</option>`).join('');
+            selNew.innerHTML = options; selEdit.innerHTML = options;
+        }
+
+        // --- ČÍSELNÍK KÁV A ÚPRAVY ---
+        document.getElementById('originPreset').addEventListener('change', (e) => {
+            const p = kbProfiles[e.target.value];
+            if(p) {
+                document.getElementById('newCoffeeName').value = e.target.value;
+                document.getElementById('cBitter').value = p.bitter; document.getElementById('cAcid').value = p.acid;
+                document.getElementById('cSweet').value = p.sweet; document.getElementById('cBody').value = p.body; document.getElementById('cNotes').value = p.notes;
+            }
+        });
+
+        document.getElementById('saveCoffeeBtn').addEventListener('click', () => {
+            const name = document.getElementById('newCoffeeName').value;
+            const roaster = document.getElementById('newCoffeeRoaster').value;
+            if(!name || !roaster) { alert('Zadejte název kávy a vyberte pražírnu!'); return; }
+            coffees.push({
+                id: Date.now(), name, roaster,
+                bitter: document.getElementById('cBitter').value, acid: document.getElementById('cAcid').value,
+                sweet: document.getElementById('cSweet').value, body: document.getElementById('cBody').value, notes: document.getElementById('cNotes').value
+            });
+            localStorage.setItem('db_coffees', JSON.stringify(coffees));
+            document.getElementById('newCoffeeName').value = ''; document.getElementById('newCoffeeRoaster').value = ''; document.getElementById('cNotes').value = '';
+            renderCoffees();
+        });
+
+        function renderCoffees() {
+            const list = document.getElementById('coffeeList'); list.innerHTML = '';
+            coffees.forEach(c => { 
+                list.innerHTML += `
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex justify-between items-center">
+                    <div class="truncate pr-4">
+                        <div class="font-bold text-slate-800 truncate">${c.name}</div>
+                        <div class="text-xs text-slate-500 truncate">${c.roaster}</div>
+                    </div>
+                    <button onclick="openEditCoffee(${c.id})" class="text-amber-600 hover:text-amber-800 p-2 bg-amber-50 rounded font-semibold text-xs whitespace-nowrap">✏️ Upravit</button>
+                </div>`; 
+            });
+        }
+
+        function openEditCoffee(id) {
+            const c = coffees.find(x => x.id === id); if(!c) return;
+            document.getElementById('editCoffeeId').value = c.id;
+            document.getElementById('ecName').value = c.name;
+            document.getElementById('ecRoaster').value = c.roaster || '';
+            document.getElementById('ecBitter').value = c.bitter || 5;
+            document.getElementById('ecAcid').value = c.acid || 5;
+            document.getElementById('ecSweet').value = c.sweet || 5;
+            document.getElementById('ecBody').value = c.body || 5;
+            document.getElementById('ecNotes').value = c.notes || '';
+            document.getElementById('editCoffeeModal').classList.replace('modal-hidden', 'modal-visible');
+        }
+
+        function saveEditCoffee() {
+            const id = parseInt(document.getElementById('editCoffeeId').value);
+            const idx = coffees.findIndex(c => c.id === id);
+            if(idx > -1) {
+                coffees[idx].name = document.getElementById('ecName').value;
+                coffees[idx].roaster = document.getElementById('ecRoaster').value;
+                coffees[idx].bitter = document.getElementById('ecBitter').value;
+                coffees[idx].acid = document.getElementById('ecAcid').value;
+                coffees[idx].sweet = document.getElementById('ecSweet').value;
+                coffees[idx].body = document.getElementById('ecBody').value;
+                coffees[idx].notes = document.getElementById('ecNotes').value;
+                localStorage.setItem('db_coffees', JSON.stringify(coffees));
+                document.getElementById('editCoffeeModal').classList.replace('modal-visible', 'modal-hidden');
+                renderCoffees();
+            }
+        }
+
+        function refreshCoffeeSelect() {
+            const select = document.getElementById('coffeeSelect'); select.innerHTML = '<option value="" disabled selected>Vyberte kávu...</option>';
+            coffees.forEach(c => select.innerHTML += `<option value="${c.id}">${c.name} (${c.roaster})</option>`);
+        }
+
+        // --- PŘÍPRAVA A RECEPTY ---
+        const targetWeightDisplay = document.getElementById('targetWeightDisplay'), doseInInput = document.getElementById('doseIn'), ratioInput = document.getElementById('ratio');
+        function triggerMethodUpdate() {
+            const val = document.getElementById('brewMethod').value, rec = kbMethods[val];
+            if(rec){ 
+                doseInInput.value=rec.dose; ratioInput.value=rec.ratio; document.getElementById('targetTime').value=rec.time; updateW(); 
+                document.getElementById('methodInfoBox').classList.remove('hidden'); document.getElementById('methodGrind').innerText = rec.grind; document.getElementById('methodNotes').innerText = rec.note;
+            }
+        }
+        document.getElementById('brewMethod').addEventListener('change', triggerMethodUpdate);
+        function updateW() { targetWeightDisplay.innerText = ((parseFloat(doseInInput.value)||0)*(parseFloat(ratioInput.value)||0)).toFixed(1)+' g'; }
+        doseInInput.addEventListener('input', updateW); ratioInput.addEventListener('input', updateW);
+
+        // --- STOPKY A HODNOCENÍ ---
+        let startTime, difference, tInterval, running = false, autoStopped = false;
+        function startTimer() { if (!running) { startTime = new Date().getTime() - (difference || 0); tInterval = setInterval(updateTime, 10); running = true; autoStopped = false; } }
+        function stopTimer() { if (running) { clearInterval(tInterval); running = false; } }
+        function resetTimer() { stopTimer(); difference = 0; document.getElementById('display').innerHTML = "00:00.0"; }
+        function updateTime() {
+            difference = new Date().getTime() - startTime;
+            let m = Math.floor((difference%(1000*60*60))/(1000*60)), s = Math.floor((difference%(1000*60))/1000), ms = Math.floor((difference%1000)/100);
+            if (!autoStopped && parseInt(document.getElementById('targetTime').value) > 0 && (difference/1000) >= parseInt(document.getElementById('targetTime').value)) { stopTimer(); autoStopped=true; openRModal(); }
+            document.getElementById('display').innerHTML = `${m<10?'0'+m:m}:${s<10?'0'+s:s}.${ms}`;
+        }
+        document.getElementById('startBtn').addEventListener('click', startTimer); document.getElementById('stopBtn').addEventListener('click', stopTimer); document.getElementById('resetBtn').addEventListener('click', resetTimer);
+
+        function openRModal() { if(running) stopTimer(); if(!document.getElementById('coffeeSelect').value) return alert('Vyberte kávu!'); document.getElementById('ratingModal').classList.replace('modal-hidden','modal-visible'); }
+        document.getElementById('triggerModalBtn').addEventListener('click', openRModal);
+        document.getElementById('cancelModalBtn').addEventListener('click', () => document.getElementById('ratingModal').classList.replace('modal-visible','modal-hidden'));
+        document.getElementById('sliderSatisfaction').addEventListener('input', (e) => { e.target.style.accentColor = `hsl(${(e.target.value/100)*120},80%,45%)`; document.getElementById('satEmoji').innerText = e.target.value<20?'🤢':e.target.value<40?'🙁':e.target.value<60?'😐':e.target.value<80?'🙂':'😍'; });
+        
+        document.getElementById('saveFinalBtn').addEventListener('click', () => {
+            brews.unshift({
+                id: Date.now(), date: new Date().toLocaleString('cs-CZ'), coffeeId: parseInt(document.getElementById('coffeeSelect').value),
+                method: document.getElementById('brewMethod').value, doseIn: parseFloat(doseInInput.value), ratio: parseFloat(ratioInput.value),
+                time: document.getElementById('display').innerText, bitter: parseInt(document.getElementById('sliderBitter').value),
+                acid: parseInt(document.getElementById('sliderAcid').value), sweet: parseInt(document.getElementById('sliderSweet').value),
+                body: parseInt(document.getElementById('sliderBody').value), satisfaction: parseInt(document.getElementById('sliderSatisfaction').value),
+                notes: document.getElementById('notesInput').value
+            });
+            localStorage.setItem('db_brews', JSON.stringify(brews));
+            document.getElementById('ratingModal').classList.replace('modal-visible','modal-hidden'); resetTimer(); switchView('archive');
+        });
+
+        // --- EDITACE EXTRAKCE ---
+        function openEditBrew(id) {
+            const b = brews.find(x => x.id === id); if(!b) return;
+            document.getElementById('ebId').value = b.id; document.getElementById('ebDoseIn').value = b.doseIn; document.getElementById('ebRatio').value = b.ratio; document.getElementById('ebTime').value = b.time;
+            document.getElementById('ebBitter').value = b.bitter || 5; document.getElementById('ebAcid').value = b.acid || 5; document.getElementById('ebSweet').value = b.sweet || 5; document.getElementById('ebBody').value = b.body || 5;
+            document.getElementById('ebSatisfaction').value = b.satisfaction || 50; document.getElementById('ebNotes').value = b.notes || '';
+            document.getElementById('editBrewModal').classList.replace('modal-hidden', 'modal-visible');
+        }
+        function saveEditBrew() {
+            const id = parseInt(document.getElementById('ebId').value), idx = brews.findIndex(b => b.id === id);
+            if(idx > -1) {
+                brews[idx].doseIn = parseFloat(document.getElementById('ebDoseIn').value); brews[idx].ratio = parseFloat(document.getElementById('ebRatio').value); brews[idx].time = document.getElementById('ebTime').value;
+                brews[idx].bitter = parseInt(document.getElementById('ebBitter').value); brews[idx].acid = parseInt(document.getElementById('ebAcid').value); brews[idx].sweet = parseInt(document.getElementById('ebSweet').value);
+                brews[idx].body = parseInt(document.getElementById('ebBody').value); brews[idx].satisfaction = parseInt(document.getElementById('ebSatisfaction').value); brews[idx].notes = document.getElementById('ebNotes').value;
+                localStorage.setItem('db_brews', JSON.stringify(brews)); document.getElementById('editBrewModal').classList.replace('modal-visible', 'modal-hidden'); renderBrews();
+            }
+        }
+
+        // --- ARCHIV A ANALÝZA ---
+        function generateRadarChart(b, a, s, bd) {
+            const ptTop=`50,${50-b*4}`, ptRight=`${50+a*4},50`, ptBottom=`50,${50+s*4}`, ptLeft=`${50-bd*4},50`;
+            return `<svg viewBox="0 0 100 100" class="w-16 h-16 mx-auto drop-shadow-sm"><line x1="50" y1="10" x2="50" y2="90" stroke="#cbd5e1"/><line x1="10" y1="50" x2="90" y2="50" stroke="#cbd5e1"/><polygon points="50,10 90,50 50,90 10,50" fill="none" stroke="#e2e8f0"/><polygon points="${ptTop} ${ptRight} ${ptBottom} ${ptLeft}" fill="rgba(245, 158, 11, 0.4)" stroke="#d97706" stroke-width="2"/><text x="50" y="8" font-size="8" text-anchor="middle" fill="#64748b">H</text><text x="96" y="53" font-size="8" text-anchor="middle" fill="#64748b">A</text><text x="50" y="98" font-size="8" text-anchor="middle" fill="#64748b">S</text><text x="4" y="53" font-size="8" text-anchor="middle" fill="#64748b">T</text></svg>`;
+        }
+
+        function analyzeFlavorProfile(b, a, s, bd) {
+            if (b >= 8 && s <= 4) return { name: 'Hořký extrém', icon: '⚠️', style: 'bg-rose-100 text-rose-800 border-rose-200' };
+            if (bd <= 3 && a >= 6 && s <= 4) return { name: 'Vodová podextrakce', icon: '💧', style: 'bg-blue-100 text-blue-800 border-blue-200' };
+            if (a >= 8 && s >= 6 && bd <= 6) return { name: 'Ovocná bomba', icon: '🍓', style: 'bg-pink-100 text-pink-800 border-pink-200' };
+            if (bd <= 4 && a >= 7 && b <= 3) return { name: 'Lehký čajový profil', icon: '🍵', style: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
+            if (bd >= 8 && b >= 6 && a <= 3) return { name: 'Těžké zemité espresso', icon: '🪨', style: 'bg-stone-200 text-stone-800 border-stone-300' };
+            if (s >= 7 && bd >= 6 && a <= 5) return { name: 'Čokoládové pohlazení', icon: '🍫', style: 'bg-amber-100 text-amber-900 border-amber-300' };
+            if (bd >= 7 && b >= 5 && s >= 5) return { name: 'Divoký French Press', icon: '🦁', style: 'bg-orange-100 text-orange-900 border-orange-300' };
+            if (s >= 7 && a >= 5 && b <= 5) return { name: 'Sladká harmonie', icon: '🍯', style: 'bg-yellow-100 text-yellow-800 border-yellow-300' };
+            return { name: 'Vyvážený standard', icon: '⚖️', style: 'bg-slate-100 text-slate-700 border-slate-200' };
+        }
+
+        document.getElementById('toggleFilterBtn').addEventListener('click', () => { document.getElementById('filterPanel').classList.toggle('filter-expanded'); document.getElementById('filterIcon').classList.toggle('rotate-180'); });
+        function updateFilters() {
+            const uNames = [...new Set(coffees.map(c=>c.name))], uRoast = [...new Set(coffees.map(c=>c.roaster))];
+            document.getElementById('filterCoffeeName').innerHTML = '<option value="all">Všechny kávy</option>' + uNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+            document.getElementById('filterRoaster').innerHTML = '<option value="all">Všechny pražírny</option>' + uRoast.map(r=>`<option value="${r}">${r}</option>`).join('');
+        }
+        document.getElementById('clearFiltersBtn').addEventListener('click', () => { document.getElementById('filterCoffeeName').value='all'; document.getElementById('filterRoaster').value='all'; document.getElementById('filterMethod').value='all'; document.getElementById('filterWeight').value=''; document.getElementById('filterNotes').value=''; renderBrews(); });
+        ['filterCoffeeName','filterRoaster','filterMethod','filterWeight','filterNotes'].forEach(id => { document.getElementById(id).addEventListener('input', renderBrews); document.getElementById(id).addEventListener('change', renderBrews); });
+
+        function renderBrews() {
+            const list = document.getElementById('logList'); list.innerHTML = '';
+            const mv = document.getElementById('filterMethod').value, wv = parseFloat(document.getElementById('filterWeight').value), nv = document.getElementById('filterNotes').value.toLowerCase(), cv = document.getElementById('filterCoffeeName').value, rv = document.getElementById('filterRoaster').value;
+            
+            let filtered = brews.filter(l => {
+                const c = coffees.find(x => x.id === l.coffeeId) || {name:'',roaster:''};
+                return (mv==='all'||l.method===mv) && (isNaN(wv)||l.doseIn===wv) && (!nv||(l.notes&&l.notes.toLowerCase().includes(nv))) && (cv==='all'||c.name===cv) && (rv==='all'||c.roaster===rv);
+            });
+            if(!filtered.length) { list.innerHTML = '<div class="text-center text-slate-500 mt-8">Žádné záznamy.</div>'; return; }
+
+            filtered.forEach(l => {
+                const c = coffees.find(x => x.id === l.coffeeId) || {name:'Neznámá',roaster:'-'};
+                const bVal = l.bitter || 5, aVal = l.acid || 5, sVal = l.sweet || 5, bdVal = l.body || 5;
+                const profile = analyzeFlavorProfile(bVal, aVal, sVal, bdVal);
+                
+                list.innerHTML += `
+                <div class="bg-white p-4 rounded-xl shadow-sm relative" style="border-left: 5px solid hsl(${(l.satisfaction||50)/100*120},80%,45%)">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-2/3"><div class="font-bold text-lg text-slate-800 truncate">${c.name}</div><div class="text-xs text-slate-500 truncate">${c.roaster}</div></div>
+                        <div class="flex flex-col items-end gap-1"><span class="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded">${l.method}</span><span class="${profile.style} border text-[10px] font-bold px-2 py-0.5 rounded shadow-sm whitespace-nowrap">${profile.icon} ${profile.name}</span></div>
+                    </div>
+                    <div class="text-slate-600 text-sm mt-3 grid grid-cols-2 gap-y-1 bg-slate-50 p-2 rounded">
+                        <div><strong>IN:</strong> ${l.doseIn} g</div><div><strong>OUT:</strong> ${(l.doseIn*l.ratio).toFixed(1)} g</div>
+                        <div><strong>Čas:</strong> ${l.time}</div><div><strong>Poměr:</strong> 1:${l.ratio}</div>
+                    </div>
+                    <div class="mt-3 bg-slate-50 p-2 rounded border border-slate-100 flex items-center justify-between">
+                        <div class="w-1/2"><div class="text-[10px] font-bold text-slate-500 uppercase mb-1">Chuťový Profil</div></div>
+                        <div class="w-1/2 flex justify-end">${generateRadarChart(bVal, aVal, sVal, bdVal)}</div>
+                    </div>
+                    ${l.notes ? `<div class="mt-2 text-sm text-slate-600 italic px-1">"${l.notes}"</div>` : ''}
+                    <div class="mt-4 flex justify-between items-center text-xs text-slate-400 border-t pt-2">
+                        <span>${l.date}</span><button onclick="openEditBrew(${l.id})" class="text-amber-600 font-semibold px-2 py-1 rounded bg-amber-50">✏️ Upravit</button>
+                    </div>
+                </div>`;
+            });
+        }
+        checkAuth();
+    </script>
+</body>
+</html>
