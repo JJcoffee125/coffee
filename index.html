@@ -34,6 +34,10 @@
                 <p class="text-xs text-slate-500 mt-2">v12.0 • Komunita a Pražírny</p>
             </div>
             <div class="space-y-5">
+                <div id="nicknameContainer" class="hidden">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Přezdívka</label>
+                    <input type="text" id="loginNickname" placeholder="Vaše přezdívka" class="w-full border-gray-300 border rounded-lg p-3 bg-slate-50 outline-none focus:border-amber-500 font-semibold text-amber-900 mb-2">
+                </div>
                 <div>
                     <label class="text-xs font-bold text-slate-500 block mb-1">E-mail</label>
                     <input type="email" id="loginEmail" placeholder="vas@email.cz" class="w-full border-gray-300 border rounded-lg p-3 bg-slate-50 outline-none focus:border-amber-500 font-semibold text-amber-900">
@@ -474,6 +478,7 @@
         }
 
         function getCurrentUser() {
+            if (auth.currentUser && auth.currentUser.displayName) return auth.currentUser.displayName;
             return auth.currentUser ? auth.currentUser.email.split('@')[0].replace(/\./g, '_') : '';
         }
 
@@ -481,6 +486,11 @@
         function checkAuth() { 
             auth.onAuthStateChanged(user => {
                 if (user) { 
+                    if (!user.emailVerified) {
+                        alert('Prosím, ověřte svůj e-mail. Poslali jsme vám ověřovací odkaz.');
+                        auth.signOut();
+                        return;
+                    }
                     currentUid = user.uid;
                     document.getElementById('loggedUserName').innerText = getCurrentUser();
                     document.getElementById('homeUserName').innerText = getCurrentUser();
@@ -502,10 +512,29 @@
             auth.signInWithEmailAndPassword(e, p).catch(err => alert('Chyba přihlášení: ' + err.message));
         });
         document.getElementById('registerBtn').addEventListener('click', () => { 
+            const nicknameContainer = document.getElementById('nicknameContainer');
+            if (nicknameContainer.classList.contains('hidden')) {
+                nicknameContainer.classList.remove('hidden');
+                document.getElementById('loginBtn').classList.add('hidden');
+                document.getElementById('registerBtn').innerText = 'Dokončit registraci';
+                return;
+            }
+
             const e = document.getElementById('loginEmail').value.trim();
             const p = document.getElementById('loginPassword').value;
-            if(!e || !p) return alert('Zadejte email a heslo.');
-            auth.createUserWithEmailAndPassword(e, p).catch(err => alert('Chyba registrace: ' + err.message));
+            const n = document.getElementById('loginNickname').value.trim();
+            if(!e || !p || !n) return alert('Zadejte přezdívku, email a heslo.');
+            
+            auth.createUserWithEmailAndPassword(e, p).then(cred => {
+                return cred.user.updateProfile({ displayName: n }).then(() => {
+                    cred.user.sendEmailVerification();
+                    alert('Registrace úspěšná! Poslali jsme vám ověřovací e-mail. Prosím, klikněte na odkaz v e-mailu a poté se přihlaste.');
+                    auth.signOut();
+                    nicknameContainer.classList.add('hidden');
+                    document.getElementById('loginBtn').classList.remove('hidden');
+                    document.getElementById('registerBtn').innerText = 'Založit účet';
+                });
+            }).catch(err => alert('Chyba registrace: ' + err.message));
         });
         document.getElementById('logoutBtn').addEventListener('click', () => { 
             auth.signOut(); 
