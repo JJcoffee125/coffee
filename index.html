@@ -7,6 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
     <style>
         #mobileMenu { transition: transform 0.3s ease-in-out; }
         .menu-hidden { transform: translateX(-100%); }
@@ -24,16 +27,25 @@
     <div id="viewLogin" class="fixed inset-0 bg-slate-800 z-[60] flex items-center justify-center block">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm mx-4">
             <div class="text-center mb-8">
-                <div class="text-5xl mb-4">☕</div>
+                <div class="flex justify-center mb-4">
+                    <img src="Kávový Deníček Coffee Journal Logo.png" alt="Logo Kávového Deníku" class="w-28 h-28 object-contain drop-shadow-md rounded-2xl">
+                </div>
                 <h1 class="text-2xl font-bold text-amber-800">Kávový Deník</h1>
                 <p class="text-xs text-slate-500 mt-2">v12.0 • Komunita a Pražírny</p>
             </div>
             <div class="space-y-5">
                 <div>
-                    <label class="text-xs font-bold text-slate-500 block mb-1">Uživatelské jméno</label>
-                    <input type="text" id="loginUser" value="admin1" placeholder="Např. admin1" class="w-full border-gray-300 border rounded-lg p-3 bg-slate-50 outline-none focus:border-amber-500 font-semibold text-amber-900">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">E-mail</label>
+                    <input type="email" id="loginEmail" placeholder="vas@email.cz" class="w-full border-gray-300 border rounded-lg p-3 bg-slate-50 outline-none focus:border-amber-500 font-semibold text-amber-900">
                 </div>
-                <button id="loginBtn" class="w-full bg-amber-600 text-white font-bold py-3 rounded-lg shadow-lg hover:bg-amber-700 transition mt-2">Vstoupit do deníku</button>
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Heslo</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" class="w-full border-gray-300 border rounded-lg p-3 bg-slate-50 outline-none focus:border-amber-500 font-semibold text-amber-900">
+                </div>
+                <div class="space-y-2 mt-2">
+                    <button id="loginBtn" class="w-full bg-amber-600 text-white font-bold py-3 rounded-lg shadow-lg hover:bg-amber-700 transition">Přihlásit se</button>
+                    <button id="registerBtn" class="w-full bg-slate-100 text-slate-700 font-bold py-3 rounded-lg shadow-sm hover:bg-slate-200 transition">Založit účet</button>
+                </div>
             </div>
         </div>
     </div>
@@ -46,15 +58,19 @@
             <h1 id="headerTitle" class="text-xl font-bold">Příprava kávy</h1>
         </header>
 
-        <nav id="mobileMenu" class="fixed inset-y-0 left-0 bg-white w-64 shadow-2xl z-40 menu-hidden pt-16 px-6 flex flex-col justify-between pb-8">
-            <ul class="space-y-4">
+        <nav id="mobileMenu" class="fixed inset-y-0 left-0 bg-white w-64 shadow-2xl z-40 menu-hidden pt-8 px-6 flex flex-col justify-between pb-8 overflow-y-auto">
+            <div>
+                <img src="Kávový Deníček Coffee Journal Logo.png" alt="Logo" class="w-20 mx-auto mb-6 rounded-xl drop-shadow-sm">
+                <ul class="space-y-4">
+                <li><button onclick="switchView('home')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🏠 Domů</button></li>
                 <li><button onclick="switchView('prep')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">☕ Nová příprava</button></li>
                 <li><button onclick="switchView('coffees')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">📦 Moje Kávy</button></li>
                 <li><button onclick="switchView('roasters')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🔥 Pražírny</button></li>
                 <li><button onclick="switchView('consumed')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🥤 Káva venku</button></li>
                 <li><button onclick="switchView('archive')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🗄️ Archiv extrakcí</button></li>
             </ul>
-            <button id="logoutBtn" class="w-full flex items-center justify-center space-x-2 text-rose-600 font-bold bg-rose-50 p-3 rounded-lg">
+            </div>
+            <button id="logoutBtn" class="w-full flex items-center justify-center space-x-2 text-rose-600 font-bold bg-rose-50 p-3 rounded-lg mt-8">
                 <span>Odhlásit se (<span id="loggedUserName"></span>)</span>
             </button>
         </nav>
@@ -62,7 +78,30 @@
 
         <main class="p-4 max-w-md mx-auto mt-2">
             
-            <div id="viewPrep" class="block">
+            <div id="viewHome" class="block">
+                <div class="mb-6 mt-2">
+                    <h2 class="text-2xl font-bold text-slate-800">Vítej zpátky, <span id="homeUserName" class="text-amber-700"></span>! 👋</h2>
+                    <p class="text-sm text-slate-500 mt-1">Co si dáme dnes dobrého?</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-8">
+                    <button onclick="switchView('prep')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md hover:border-amber-200 transition">
+                        <span class="text-4xl mb-2">☕</span>
+                        <span class="font-bold text-slate-700 text-sm">Nová příprava</span>
+                    </button>
+                    <button onclick="switchView('consumed')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md hover:border-blue-200 transition">
+                        <span class="text-4xl mb-2">🥤</span>
+                        <span class="font-bold text-slate-700 text-sm text-center">Káva venku</span>
+                    </button>
+                </div>
+
+                <div class="mb-4">
+                    <h3 class="text-lg font-bold text-slate-700 mb-3">Poslední záznamy</h3>
+                    <div id="homeRecentFeed" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <div id="viewPrep" class="hidden">
                 <div class="bg-white rounded-xl shadow-md p-6 mb-6">
                     <h2 class="text-lg font-bold mb-4 border-b pb-2 text-slate-700">Parametry receptu</h2>
                     <div class="space-y-4">
@@ -346,48 +385,80 @@
         ];
 
         // --- DATABÁZE A MIGRACE ---
-        let coffees = JSON.parse(localStorage.getItem('db_coffees')) || [];
-        let brews = JSON.parse(localStorage.getItem('db_brews')) || [];
-        let consumed = JSON.parse(localStorage.getItem('db_consumed')) || [];
-        let roasters = JSON.parse(localStorage.getItem('db_roasters')) || defaultRoasters;
+        const firebaseConfig = {
+            apiKey: "AIzaSyChv204XR4CXW2lr-oE7YxVZUiOHHVXShE",
+            authDomain: "jjcoffee-dd5e7.firebaseapp.com",
+            databaseURL: "https://jjcoffee-dd5e7-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "jjcoffee-dd5e7",
+            storageBucket: "jjcoffee-dd5e7.firebasestorage.app",
+            messagingSenderId: "228055894949",
+            appId: "1:228055894949:web:41c29d6b9f5b4b68ed764c",
+            measurementId: "G-ZKW1XXPZMG"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+        let currentUid = null;
 
-        // Migrační skript: Pokud existují stará data pražíren s jedním 'rating' jako číslo, převeď ho do objektu
-        roasters = roasters.map(r => {
-            if (typeof r.rating === 'number') {
-                r.ratings = {};
-                if (r.rating > 0) r.ratings['admin1'] = r.rating;
-                delete r.rating;
-            }
-            if (!r.ratings) r.ratings = {};
-            return r;
-        });
+        let coffees = [];
+        let brews = [];
+        let consumed = [];
+        let roasters = [];
+
+        function loadUserData() {
+            db.ref('users/' + currentUid + '/coffees').on('value', snap => { coffees = snap.val() ? Object.values(snap.val()) : []; renderCoffees(); refreshCoffeeSelect(); });
+            db.ref('users/' + currentUid + '/brews').on('value', snap => { brews = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderBrews(); renderHomeFeed(); });
+            db.ref('users/' + currentUid + '/consumed').on('value', snap => { consumed = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderConsumed(); renderHomeFeed(); });
+            db.ref('roasters').on('value', snap => { 
+                if(snap.val()) roasters = Object.values(snap.val()); 
+                else { roasters = typeof defaultRoasters !== 'undefined' ? defaultRoasters : []; db.ref('roasters').set(roasters); }
+                renderRoasters(); updateRoasterSelects();
+            });
+        }
+        
+        function saveDb(type) {
+            if(type === 'coffees') db.ref('users/' + currentUid + '/coffees').set(coffees);
+            if(type === 'brews') db.ref('users/' + currentUid + '/brews').set(brews);
+            if(type === 'consumed') db.ref('users/' + currentUid + '/consumed').set(consumed);
+            if(type === 'roasters') db.ref('roasters').set(roasters);
+        }
 
         function getCurrentUser() {
-            return localStorage.getItem('currentUser') || 'admin1';
+            return auth.currentUser ? auth.currentUser.email.split('@')[0].replace(/\./g, '_') : '';
         }
 
         // --- AUTH ---
         function checkAuth() { 
-            if (localStorage.getItem('isLoggedIn') === 'true') { 
-                document.getElementById('loggedUserName').innerText = getCurrentUser();
-                document.getElementById('viewLogin').classList.replace('block', 'hidden'); 
-                document.getElementById('appContainer').classList.replace('hidden', 'block'); 
-                switchView('prep'); 
-            } else { 
-                document.getElementById('viewLogin').classList.replace('hidden', 'block'); 
-                document.getElementById('appContainer').classList.replace('block', 'hidden'); 
-            } 
+            auth.onAuthStateChanged(user => {
+                if (user) { 
+                    currentUid = user.uid;
+                    document.getElementById('loggedUserName').innerText = getCurrentUser();
+                    document.getElementById('homeUserName').innerText = getCurrentUser();
+                    document.getElementById('viewLogin').classList.replace('block', 'hidden'); 
+                    document.getElementById('appContainer').classList.replace('hidden', 'block'); 
+                    loadUserData();
+                    switchView('home'); 
+                } else { 
+                    currentUid = null;
+                    document.getElementById('viewLogin').classList.replace('hidden', 'block'); 
+                    document.getElementById('appContainer').classList.replace('block', 'hidden'); 
+                }
+            });
         }
         document.getElementById('loginBtn').addEventListener('click', () => { 
-            const user = document.getElementById('loginUser').value.trim();
-            if(!user) return alert('Zadejte uživatelské jméno.');
-            localStorage.setItem('isLoggedIn', 'true'); 
-            localStorage.setItem('currentUser', user);
-            checkAuth(); 
+            const e = document.getElementById('loginEmail').value.trim();
+            const p = document.getElementById('loginPassword').value;
+            if(!e || !p) return alert('Zadejte email a heslo.');
+            auth.signInWithEmailAndPassword(e, p).catch(err => alert('Chyba přihlášení: ' + err.message));
+        });
+        document.getElementById('registerBtn').addEventListener('click', () => { 
+            const e = document.getElementById('loginEmail').value.trim();
+            const p = document.getElementById('loginPassword').value;
+            if(!e || !p) return alert('Zadejte email a heslo.');
+            auth.createUserWithEmailAndPassword(e, p).catch(err => alert('Chyba registrace: ' + err.message));
         });
         document.getElementById('logoutBtn').addEventListener('click', () => { 
-            localStorage.removeItem('isLoggedIn'); 
-            checkAuth(); 
+            auth.signOut(); 
         });
 
         // --- MENU ---
@@ -395,12 +466,14 @@
         document.getElementById('menuBtn').addEventListener('click', toggleMenu); document.getElementById('menuOverlay').addEventListener('click', toggleMenu);
         
         function switchView(view) {
+            document.getElementById('viewHome').style.display = view === 'home' ? 'block' : 'none';
             document.getElementById('viewPrep').style.display = view === 'prep' ? 'block' : 'none';
             document.getElementById('viewCoffees').style.display = view === 'coffees' ? 'block' : 'none';
             document.getElementById('viewRoasters').style.display = view === 'roasters' ? 'block' : 'none';
             document.getElementById('viewArchive').style.display = view === 'archive' ? 'block' : 'none';
             document.getElementById('viewConsumed').style.display = view === 'consumed' ? 'block' : 'none';
             
+            if(view === 'home') { document.getElementById('headerTitle').innerText = "Kávový Deník"; document.getElementById('homeUserName').innerText = getCurrentUser(); renderHomeFeed(); }
             if(view === 'prep') { document.getElementById('headerTitle').innerText = "Příprava kávy"; refreshCoffeeSelect(); triggerMethodUpdate(); }
             if(view === 'coffees') { document.getElementById('headerTitle').innerText = "Číselník káv"; updateRoasterSelects(); renderCoffees(); }
             if(view === 'roasters') { document.getElementById('headerTitle').innerText = "Pražírny"; renderRoasters(); }
@@ -420,7 +493,7 @@
             if(!name) return alert('Zadejte název pražírny.');
             
             roasters.push({ id: Date.now(), name: name, location: loc, ratings: {} });
-            localStorage.setItem('db_roasters', JSON.stringify(roasters));
+            saveDb('roasters');
             
             document.getElementById('newRoasterName').value = '';
             document.getElementById('newRoasterLocation').value = '';
@@ -478,7 +551,7 @@
             if(idx > -1) { 
                 if(!roasters[idx].ratings) roasters[idx].ratings = {};
                 roasters[idx].ratings[currentUser] = rating; 
-                localStorage.setItem('db_roasters', JSON.stringify(roasters)); 
+                saveDb('roasters'); 
                 renderRoasters(); 
             }
         }
@@ -509,7 +582,7 @@
                 bitter: document.getElementById('cBitter').value, acid: document.getElementById('cAcid').value,
                 sweet: document.getElementById('cSweet').value, body: document.getElementById('cBody').value, notes: document.getElementById('cNotes').value
             });
-            localStorage.setItem('db_coffees', JSON.stringify(coffees));
+            saveDb('coffees');
             document.getElementById('newCoffeeName').value = ''; document.getElementById('newCoffeeRoaster').value = ''; document.getElementById('cNotes').value = '';
             renderCoffees();
         });
@@ -552,7 +625,7 @@
                 coffees[idx].sweet = document.getElementById('ecSweet').value;
                 coffees[idx].body = document.getElementById('ecBody').value;
                 coffees[idx].notes = document.getElementById('ecNotes').value;
-                localStorage.setItem('db_coffees', JSON.stringify(coffees));
+                saveDb('coffees');
                 document.getElementById('editCoffeeModal').classList.replace('modal-visible', 'modal-hidden');
                 renderCoffees();
             }
@@ -603,7 +676,7 @@
                 body: parseInt(document.getElementById('sliderBody').value), satisfaction: parseInt(document.getElementById('sliderSatisfaction').value),
                 notes: document.getElementById('notesInput').value
             });
-            localStorage.setItem('db_brews', JSON.stringify(brews));
+            saveDb('brews');
             document.getElementById('ratingModal').classList.replace('modal-visible','modal-hidden'); resetTimer(); switchView('archive');
         });
 
@@ -621,7 +694,7 @@
                 brews[idx].doseIn = parseFloat(document.getElementById('ebDoseIn').value); brews[idx].ratio = parseFloat(document.getElementById('ebRatio').value); brews[idx].time = document.getElementById('ebTime').value;
                 brews[idx].bitter = parseInt(document.getElementById('ebBitter').value); brews[idx].acid = parseInt(document.getElementById('ebAcid').value); brews[idx].sweet = parseInt(document.getElementById('ebSweet').value);
                 brews[idx].body = parseInt(document.getElementById('ebBody').value); brews[idx].satisfaction = parseInt(document.getElementById('ebSatisfaction').value); brews[idx].notes = document.getElementById('ebNotes').value;
-                localStorage.setItem('db_brews', JSON.stringify(brews)); document.getElementById('editBrewModal').classList.replace('modal-visible', 'modal-hidden'); renderBrews();
+                saveDb('brews'); document.getElementById('editBrewModal').classList.replace('modal-visible', 'modal-hidden'); renderBrews();
             }
         }
 
@@ -684,6 +757,51 @@
                     ${l.notes ? `<div class="mt-2 text-sm text-slate-600 italic px-1">"${l.notes}"</div>` : ''}
                     <div class="mt-4 flex justify-between items-center text-xs text-slate-400 border-t pt-2">
                         <span>${l.date}</span><button onclick="openEditBrew(${l.id})" class="text-amber-600 font-semibold px-2 py-1 rounded bg-amber-50">✏️ Upravit</button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // --- DOMOVSKÁ STRÁNKA (FEED) ---
+        function parseCzechDate(dateString) {
+            if(!dateString) return 0;
+            const parts = dateString.split(' ');
+            if(parts.length < 4) return 0;
+            const d = parseInt(parts[0]); const m = parseInt(parts[1]) - 1; const y = parseInt(parts[2]);
+            const time = parts[3].split(':');
+            return new Date(y, m, d, time[0], time[1], time[2] || 0).getTime();
+        }
+
+        function renderHomeFeed() {
+            const feed = document.getElementById('homeRecentFeed'); feed.innerHTML = '';
+            let allLogs = brews.map(b => {
+                const c = coffees.find(x => x.id === b.coffeeId) || {name:'Neznámá káva',roaster:''};
+                return { ...b, sortDate: parseCzechDate(b.date), title: c.name, subtitle: c.roaster, isConsumed: false };
+            });
+            let allConsumed = consumed.map(c => {
+                return { ...c, sortDate: parseCzechDate(c.date), title: c.type, subtitle: c.location, isConsumed: true };
+            });
+
+            let combined = [...allLogs, ...allConsumed].sort((a, b) => b.sortDate - a.sortDate).slice(0, 3);
+            
+            if(!combined.length) { feed.innerHTML = '<div class="text-center text-slate-500 text-sm mt-4 bg-white p-6 rounded-2xl shadow-sm">Zatím nemáte žádné záznamy.</div>'; return; }
+
+            combined.forEach(l => {
+                const icon = l.isConsumed ? '🥤' : '☕';
+                const styleClass = l.isConsumed ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-800';
+                
+                feed.innerHTML += `
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center cursor-pointer hover:shadow" onclick="switchView('archive'); if('${l.isConsumed}' === 'true'){ switchArchiveTab('consumed'); } else { switchArchiveTab('brews'); }">
+                    <div class="flex items-center space-x-3 w-3/4">
+                        <div class="${styleClass} w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0">${icon}</div>
+                        <div class="truncate w-full">
+                            <div class="font-bold text-slate-800 text-sm truncate w-full">${l.title}</div>
+                            <div class="text-[10px] text-slate-500 truncate w-full">${l.subtitle}</div>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0 w-1/4">
+                        <div class="text-[10px] text-slate-400 mb-1 whitespace-nowrap">${l.date.split(' ').slice(0, 3).join(' ')}</div>
+                        <div class="text-xs font-bold ${l.satisfaction >= 70 ? 'text-emerald-600' : (l.satisfaction <= 30 ? 'text-rose-600' : 'text-amber-600')}">${l.satisfaction}%</div>
                     </div>
                 </div>`;
             });
@@ -770,7 +888,7 @@
                 satisfaction: parseInt(document.getElementById('consSatisfaction').value),
                 notes: document.getElementById('consNotes').value
             });
-            localStorage.setItem('db_consumed', JSON.stringify(consumed));
+            saveDb('consumed');
             document.getElementById('consumedLocation').value = '';
             document.getElementById('consNotes').value = '';
             document.getElementById('consSatisfaction').value = 50; document.getElementById('consEmoji').innerText = '😐'; document.getElementById('consSatisfaction').style.accentColor = 'hsl(60, 80%, 45%)';
