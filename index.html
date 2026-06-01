@@ -66,6 +66,7 @@
                 <li><button onclick="switchView('prep')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">☕ Nová příprava</button></li>
                 <li><button onclick="switchView('coffees')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">📦 Moje Kávy</button></li>
                 <li><button onclick="switchView('roasters')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🔥 Pražírny</button></li>
+                <li><button onclick="switchView('community')" class="w-full text-left text-lg font-semibold text-emerald-600 hover:text-emerald-700 border-b pb-2">🤝 Kávičkáři</button></li>
                 <li><button onclick="switchView('consumed')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🥤 Káva venku</button></li>
                 <li><button onclick="switchView('archive')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🗄️ Archiv extrakcí</button></li>
             </ul>
@@ -98,6 +99,22 @@
                 <div class="mb-4">
                     <h3 class="text-lg font-bold text-slate-700 mb-3">Poslední záznamy</h3>
                     <div id="homeRecentFeed" class="space-y-3"></div>
+                </div>
+            </div>
+
+            <div id="viewCommunity" class="hidden">
+                <div class="flex mb-4 bg-slate-200 rounded-lg p-1">
+                    <button id="tabCommPublic" onclick="switchCommTab('public')" class="w-1/3 text-center py-2 text-sm font-bold rounded-md bg-white shadow text-emerald-700">Veřejné</button>
+                    <button id="tabCommFriends" onclick="switchCommTab('friends')" class="w-1/3 text-center py-2 text-sm font-bold rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-300">Sledovaní</button>
+                    <button id="tabCommSearch" onclick="switchCommTab('search')" class="w-1/3 text-center py-2 text-sm font-bold rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-300">Hledat</button>
+                </div>
+                <div id="commPublicSection" class="space-y-4"></div>
+                <div id="commFriendsSection" class="hidden space-y-4"></div>
+                <div id="commSearchSection" class="hidden">
+                    <div class="bg-white rounded-xl shadow-md p-4 mb-4">
+                        <input type="text" id="commSearchInput" placeholder="Hledat uživatele podle jména..." class="w-full border rounded-lg p-2 text-sm" onkeyup="renderCommunitySearch()">
+                    </div>
+                    <div id="commSearchResults" class="space-y-2"></div>
                 </div>
             </div>
 
@@ -234,6 +251,15 @@
                         </div>
                         <textarea id="consNotes" rows="2" placeholder="Zajímavosti, pražírna, typ zrna..." class="w-full border rounded-lg p-2 text-sm"></textarea>
                         
+                        <div class="mt-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <label class="text-xs font-bold text-slate-600 block mb-2">Sdílení</label>
+                            <select id="consVisibility" class="w-full border-gray-300 border rounded-lg p-2 text-sm">
+                                <option value="private">🔒 Soukromé (vidím jen já)</option>
+                                <option value="friends">👥 Sledovaní (vidí moji sledující)</option>
+                                <option value="public">🌍 Veřejné (vidí všichni)</option>
+                            </select>
+                        </div>
+                        
                         <button id="saveConsumedBtn" class="w-full bg-amber-600 text-white font-bold py-3 rounded-lg shadow-lg">Uložit záznam</button>
                     </div>
                 </div>
@@ -295,6 +321,16 @@
                     <input type="range" id="sliderSatisfaction" min="0" max="100" value="50" style="accent-color: hsl(60, 80%, 45%);">
                 </div>
                 <textarea id="notesInput" rows="2" placeholder="Poznámky k přípravě..." class="w-full border rounded-lg p-2 text-sm"></textarea>
+                
+                <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 mt-2">
+                    <label class="text-xs font-bold text-slate-600 block mb-2">Sdílení</label>
+                    <select id="brewVisibility" class="w-full border-gray-300 border rounded-lg p-2 text-sm bg-white">
+                        <option value="private">🔒 Soukromé</option>
+                        <option value="friends">👥 Sledovaní</option>
+                        <option value="public">🌍 Veřejné</option>
+                    </select>
+                </div>
+
                 <div class="flex space-x-3 mt-4">
                     <button id="cancelModalBtn" class="w-1/3 bg-slate-200 py-2 rounded-lg">Zpět</button>
                     <button id="saveFinalBtn" class="w-2/3 bg-emerald-600 text-white font-bold py-2 rounded-lg">Uložit</button>
@@ -404,11 +440,24 @@
         let brews = [];
         let consumed = [];
         let roasters = [];
+        
+        let following = [];
+        let communityBrews = [];
+        let communityConsumed = [];
+        let allUserProfiles = {};
 
         function loadUserData() {
+            db.ref('userProfiles/' + currentUid).set({ username: getCurrentUser() });
+            
+            db.ref('userProfiles').on('value', snap => { allUserProfiles = snap.val() || {}; renderCommunity(); });
             db.ref('users/' + currentUid + '/coffees').on('value', snap => { coffees = snap.val() ? Object.values(snap.val()) : []; renderCoffees(); refreshCoffeeSelect(); });
             db.ref('users/' + currentUid + '/brews').on('value', snap => { brews = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderBrews(); renderHomeFeed(); });
             db.ref('users/' + currentUid + '/consumed').on('value', snap => { consumed = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderConsumed(); renderHomeFeed(); });
+            db.ref('users/' + currentUid + '/following').on('value', snap => { following = snap.val() ? Object.values(snap.val()) : []; renderCommunity(); });
+            
+            db.ref('community_brews').on('value', snap => { communityBrews = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderCommunity(); });
+            db.ref('community_consumed').on('value', snap => { communityConsumed = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderCommunity(); });
+
             db.ref('roasters').on('value', snap => { 
                 if(snap.val()) roasters = Object.values(snap.val()); 
                 else { roasters = typeof defaultRoasters !== 'undefined' ? defaultRoasters : []; db.ref('roasters').set(roasters); }
@@ -421,6 +470,7 @@
             if(type === 'brews') db.ref('users/' + currentUid + '/brews').set(brews);
             if(type === 'consumed') db.ref('users/' + currentUid + '/consumed').set(consumed);
             if(type === 'roasters') db.ref('roasters').set(roasters);
+            if(type === 'following') db.ref('users/' + currentUid + '/following').set(following);
         }
 
         function getCurrentUser() {
@@ -472,6 +522,7 @@
             document.getElementById('viewRoasters').style.display = view === 'roasters' ? 'block' : 'none';
             document.getElementById('viewArchive').style.display = view === 'archive' ? 'block' : 'none';
             document.getElementById('viewConsumed').style.display = view === 'consumed' ? 'block' : 'none';
+            document.getElementById('viewCommunity').style.display = view === 'community' ? 'block' : 'none';
             
             if(view === 'home') { document.getElementById('headerTitle').innerText = "Kávový Deník"; document.getElementById('homeUserName').innerText = getCurrentUser(); renderHomeFeed(); }
             if(view === 'prep') { document.getElementById('headerTitle').innerText = "Příprava kávy"; refreshCoffeeSelect(); triggerMethodUpdate(); }
@@ -479,7 +530,79 @@
             if(view === 'roasters') { document.getElementById('headerTitle').innerText = "Pražírny"; renderRoasters(); }
             if(view === 'archive') { document.getElementById('headerTitle').innerText = "Archiv extrakcí"; updateFilters(); renderBrews(); switchArchiveTab('brews'); }
             if(view === 'consumed') { document.getElementById('headerTitle').innerText = "Káva venku"; }
+            if(view === 'community') { document.getElementById('headerTitle').innerText = "Kávičkáři"; renderCommunity(); }
             if(!document.getElementById('mobileMenu').classList.contains('menu-hidden')) toggleMenu();
+        }
+
+        function switchCommTab(tab) {
+            document.getElementById('commPublicSection').classList.add('hidden');
+            document.getElementById('commFriendsSection').classList.add('hidden');
+            document.getElementById('commSearchSection').classList.add('hidden');
+            const btns = [document.getElementById('tabCommPublic'), document.getElementById('tabCommFriends'), document.getElementById('tabCommSearch')];
+            btns.forEach(b => b.className = 'w-1/3 text-center py-2 text-sm font-bold rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-300');
+            
+            if(tab === 'public') { document.getElementById('commPublicSection').classList.remove('hidden'); document.getElementById('tabCommPublic').className = 'w-1/3 text-center py-2 text-sm font-bold rounded-md bg-white shadow text-emerald-700'; }
+            if(tab === 'friends') { document.getElementById('commFriendsSection').classList.remove('hidden'); document.getElementById('tabCommFriends').className = 'w-1/3 text-center py-2 text-sm font-bold rounded-md bg-white shadow text-emerald-700'; }
+            if(tab === 'search') { document.getElementById('commSearchSection').classList.remove('hidden'); document.getElementById('tabCommSearch').className = 'w-1/3 text-center py-2 text-sm font-bold rounded-md bg-white shadow text-emerald-700'; renderCommunitySearch(); }
+        }
+
+        function toggleFollow(uid) {
+            if(following.includes(uid)) following = following.filter(x => x !== uid);
+            else following.push(uid);
+            saveDb('following');
+            renderCommunitySearch();
+            renderCommunity();
+        }
+
+        function renderCommunity() {
+            const pubSection = document.getElementById('commPublicSection'); if(pubSection) pubSection.innerHTML = '';
+            const friSection = document.getElementById('commFriendsSection'); if(friSection) friSection.innerHTML = '';
+            if(!pubSection || !friSection) return;
+            
+            let allPub = [...communityBrews.map(x => ({...x, isConsumed:false})), ...communityConsumed.map(x => ({...x, isConsumed:true}))].sort((a,b) => parseCzechDate(b.date) - parseCzechDate(a.date));
+            
+            let friLogs = allPub.filter(x => following.includes(x.authorUid) && (x.visibility === 'public' || x.visibility === 'friends'));
+            let pubLogs = allPub.filter(x => x.visibility === 'public');
+
+            const renderPost = (l) => {
+                const icon = l.isConsumed ? '🥤' : '☕';
+                const styleClass = l.isConsumed ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-800';
+                return `
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
+                    <div class="flex items-center space-x-3 w-3/4">
+                        <div class="${styleClass} w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0">${icon}</div>
+                        <div class="truncate w-full">
+                            <div class="font-bold text-slate-800 text-sm truncate w-full">${l.authorName} <span class="text-[10px] font-normal text-slate-400 ml-1">připravil${l.isConsumed?'a v':''} ${l.isConsumed ? l.type : 'Kávu'}</span></div>
+                            <div class="text-[10px] text-slate-500 truncate w-full">${l.isConsumed ? l.location : l.method}</div>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0 w-1/4">
+                        <div class="text-[10px] text-slate-400 mb-1 whitespace-nowrap">${l.date.split(' ').slice(0, 3).join(' ')}</div>
+                        <div class="text-xs font-bold ${l.satisfaction >= 70 ? 'text-emerald-600' : (l.satisfaction <= 30 ? 'text-rose-600' : 'text-amber-600')}">${l.satisfaction}%</div>
+                    </div>
+                </div>`;
+            };
+
+            if(!pubLogs.length) pubSection.innerHTML = '<div class="text-center text-slate-500 text-sm p-4 bg-white rounded-xl">Zatím žádné veřejné záznamy.</div>';
+            else pubLogs.forEach(l => pubSection.innerHTML += renderPost(l));
+
+            if(!friLogs.length) friSection.innerHTML = '<div class="text-center text-slate-500 text-sm p-4 bg-white rounded-xl">Zatím žádné záznamy od sledovaných.</div>';
+            else friLogs.forEach(l => friSection.innerHTML += renderPost(l));
+        }
+
+        function renderCommunitySearch() {
+            const query = document.getElementById('commSearchInput').value.toLowerCase();
+            const resSection = document.getElementById('commSearchResults'); resSection.innerHTML = '';
+            const uids = Object.keys(allUserProfiles).filter(k => k !== currentUid && allUserProfiles[k].username.toLowerCase().includes(query));
+            if(!uids.length) { resSection.innerHTML = '<div class="text-center text-slate-500 text-sm p-4">Nikdo nenalezen.</div>'; return; }
+            uids.forEach(uid => {
+                const isF = following.includes(uid);
+                resSection.innerHTML += `
+                <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
+                    <div class="font-bold text-slate-700">${allUserProfiles[uid].username}</div>
+                    <button onclick="toggleFollow('${uid}')" class="px-3 py-1 rounded text-sm font-bold ${isF ? 'bg-slate-200 text-slate-600' : 'bg-emerald-100 text-emerald-700'}">${isF ? 'Zrušit sledování' : 'Sledovat'}</button>
+                </div>`;
+            });
         }
 
         // --- INICIALIZACE METOD ---
@@ -668,15 +791,19 @@
         document.getElementById('sliderSatisfaction').addEventListener('input', (e) => { e.target.style.accentColor = `hsl(${(e.target.value/100)*120},80%,45%)`; document.getElementById('satEmoji').innerText = e.target.value<20?'🤢':e.target.value<40?'🙁':e.target.value<60?'😐':e.target.value<80?'🙂':'😍'; });
         
         document.getElementById('saveFinalBtn').addEventListener('click', () => {
-            brews.unshift({
+            const brewData = {
                 id: Date.now(), date: new Date().toLocaleString('cs-CZ'), coffeeId: parseInt(document.getElementById('coffeeSelect').value),
                 method: document.getElementById('brewMethod').value, doseIn: parseFloat(doseInInput.value), ratio: parseFloat(ratioInput.value),
                 time: document.getElementById('display').innerText, bitter: parseInt(document.getElementById('sliderBitter').value),
                 acid: parseInt(document.getElementById('sliderAcid').value), sweet: parseInt(document.getElementById('sliderSweet').value),
                 body: parseInt(document.getElementById('sliderBody').value), satisfaction: parseInt(document.getElementById('sliderSatisfaction').value),
-                notes: document.getElementById('notesInput').value
-            });
+                notes: document.getElementById('notesInput').value, visibility: document.getElementById('brewVisibility').value
+            };
+            brews.unshift(brewData);
             saveDb('brews');
+            if (brewData.visibility !== 'private') {
+                db.ref('community_brews').push({ ...brewData, authorUid: currentUid, authorName: getCurrentUser() });
+            }
             document.getElementById('ratingModal').classList.replace('modal-visible','modal-hidden'); resetTimer(); switchView('archive');
         });
 
@@ -875,7 +1002,7 @@
         });
 
         document.getElementById('saveConsumedBtn').addEventListener('click', () => {
-            consumed.unshift({
+            const consData = {
                 id: Date.now(),
                 date: new Date().toLocaleString('cs-CZ'),
                 type: document.getElementById('consumedType').value,
@@ -886,9 +1013,14 @@
                 sweet: parseInt(document.getElementById('consSweet').value),
                 body: parseInt(document.getElementById('consBody').value),
                 satisfaction: parseInt(document.getElementById('consSatisfaction').value),
-                notes: document.getElementById('consNotes').value
-            });
+                notes: document.getElementById('consNotes').value,
+                visibility: document.getElementById('consVisibility').value
+            };
+            consumed.unshift(consData);
             saveDb('consumed');
+            if (consData.visibility !== 'private') {
+                db.ref('community_consumed').push({ ...consData, authorUid: currentUid, authorName: getCurrentUser() });
+            }
             document.getElementById('consumedLocation').value = '';
             document.getElementById('consNotes').value = '';
             document.getElementById('consSatisfaction').value = 50; document.getElementById('consEmoji').innerText = '😐'; document.getElementById('consSatisfaction').style.accentColor = 'hsl(60, 80%, 45%)';
