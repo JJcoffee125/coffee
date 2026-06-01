@@ -708,7 +708,23 @@
                 if(!formMap) {
                     formMap = L.map('mapPreview').setView([lat, lon], 16);
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(formMap);
-                    formMarker = L.marker([lat, lon]).addTo(formMap);
+                    formMarker = L.marker([lat, lon], {draggable: true}).addTo(formMap);
+                    formMarker.on('dragend', function(e) {
+                        const newPos = e.target.getLatLng();
+                        consLat = newPos.lat; consLon = newPos.lng;
+                        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${consLat}&lon=${consLon}`)
+                            .then(res => res.json())
+                            .then(data => {
+                                if(data && data.address) {
+                                    let place = data.address.amenity || data.address.cafe || data.address.restaurant;
+                                    let road = data.address.road;
+                                    let city = data.address.city || data.address.town || data.address.village;
+                                    let parts = [];
+                                    if (place) parts.push(place); if (road) parts.push(road); if (city) parts.push(city);
+                                    input.value = parts.length > 0 ? parts.join(', ') : data.display_name;
+                                }
+                            });
+                    });
                 } else {
                     formMap.setView([lat, lon], 16);
                     formMarker.setLatLng([lat, lon]);
