@@ -110,6 +110,14 @@
                         <span class="text-4xl mb-2">🥤</span>
                         <span class="font-bold text-slate-700 text-sm text-center">Káva venku</span>
                     </button>
+                    <button onclick="switchView('roasters')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md hover:border-emerald-200 transition">
+                        <span class="text-4xl mb-2">🏭</span>
+                        <span class="font-bold text-slate-700 text-sm text-center">Nová pražírna</span>
+                    </button>
+                    <button onclick="switchView('coffees')" class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center justify-center hover:shadow-md hover:border-violet-200 transition">
+                        <span class="text-4xl mb-2">🫘</span>
+                        <span class="font-bold text-slate-700 text-sm text-center">Nový druh kávy</span>
+                    </button>
                 </div>
 
                 <div class="mb-4">
@@ -403,6 +411,35 @@
                 </div>
             </div>
         </div>
+        </div>
+    </div>
+
+    <div id="editConsumedModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 modal-hidden modal-transition px-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold text-slate-800 mb-4 border-b pb-2">Úprava kávy venku</h2>
+            <input type="hidden" id="econsId">
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-slate-500 block">Druh kávy</label>
+                    <input type="text" id="econsType" class="w-full border rounded p-2 text-sm" placeholder="Espresso, Flat White...">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-500 block">Místo</label>
+                    <input type="text" id="econsLocation" class="w-full border rounded p-2 text-sm" placeholder="Kavárna, město...">
+                </div>
+                <div class="bg-slate-50 p-3 rounded-lg border text-sm space-y-2 mt-2">
+                    <div class="flex flex-col"><span class="text-xs text-slate-500">Hořkost</span><input type="range" id="econsBitter" min="1" max="10" class="accent-slate-700"></div>
+                    <div class="flex flex-col"><span class="text-xs text-slate-500">Acidita</span><input type="range" id="econsAcid" min="1" max="10" class="accent-amber-500"></div>
+                    <div class="flex flex-col"><span class="text-xs text-slate-500">Sladkost</span><input type="range" id="econsSweet" min="1" max="10" class="accent-pink-500"></div>
+                    <div class="flex flex-col"><span class="text-xs text-slate-500">Tělo</span><input type="range" id="econsBody" min="1" max="10" class="accent-amber-800"></div>
+                </div>
+                <div><label class="text-xs text-slate-500 block">Celková spokojenost (0-100)</label><input type="range" id="econsSatisfaction" min="0" max="100" class="accent-blue-500"></div>
+                <div><label class="text-xs text-slate-500 block">Poznámky</label><textarea id="econsNotes" rows="2" class="w-full border rounded p-2 text-sm"></textarea></div>
+                <div class="flex space-x-3 mt-4">
+                    <button onclick="document.getElementById('editConsumedModal').classList.replace('modal-visible', 'modal-hidden')" class="w-1/3 bg-slate-200 py-2 rounded-lg text-sm">Zrušit</button>
+                    <button onclick="saveEditConsumed()" class="w-2/3 bg-blue-600 text-white font-bold py-2 rounded-lg text-sm">Uložit úpravy</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1220,9 +1257,43 @@
                         <div class="w-1/2 flex justify-end">${generateRadarChart(bVal, aVal, sVal, bdVal)}</div>
                     </div>
                     ${l.notes ? `<div class="mt-2 text-sm text-slate-600 italic px-1">"${l.notes}"</div>` : ''}
-                    <div class="mt-4 text-xs text-slate-400 border-t pt-2">${l.date}</div>
+                    <div class="mt-4 flex justify-between items-center text-xs text-slate-400 border-t pt-2">
+                        <span>${l.date}</span><button onclick="openEditConsumed(${l.id})" class="text-blue-600 font-semibold px-2 py-1 rounded bg-blue-50">✏️ Upravit</button>
+                    </div>
                 </div>`;
             });
+        }
+
+        function openEditConsumed(id) {
+            const c = consumed.find(x => x.id === id); if(!c) return;
+            document.getElementById('econsId').value = c.id;
+            document.getElementById('econsType').value = c.type || '';
+            document.getElementById('econsLocation').value = c.location || '';
+            document.getElementById('econsBitter').value = c.bitter || 5;
+            document.getElementById('econsAcid').value = c.acid || 5;
+            document.getElementById('econsSweet').value = c.sweet || 5;
+            document.getElementById('econsBody').value = c.body || 5;
+            document.getElementById('econsSatisfaction').value = c.satisfaction || 50;
+            document.getElementById('econsNotes').value = c.notes || '';
+            document.getElementById('editConsumedModal').classList.replace('modal-hidden', 'modal-visible');
+        }
+
+        function saveEditConsumed() {
+            const id = parseInt(document.getElementById('econsId').value);
+            const idx = consumed.findIndex(c => c.id === id);
+            if(idx > -1) {
+                consumed[idx].type = document.getElementById('econsType').value;
+                consumed[idx].location = document.getElementById('econsLocation').value;
+                consumed[idx].bitter = parseInt(document.getElementById('econsBitter').value);
+                consumed[idx].acid = parseInt(document.getElementById('econsAcid').value);
+                consumed[idx].sweet = parseInt(document.getElementById('econsSweet').value);
+                consumed[idx].body = parseInt(document.getElementById('econsBody').value);
+                consumed[idx].satisfaction = parseInt(document.getElementById('econsSatisfaction').value);
+                consumed[idx].notes = document.getElementById('econsNotes').value;
+                saveDb('consumed');
+                document.getElementById('editConsumedModal').classList.replace('modal-visible', 'modal-hidden');
+                renderConsumed();
+            }
         }
 
         checkAuth();
