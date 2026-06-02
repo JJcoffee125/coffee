@@ -79,9 +79,17 @@
                 <li><button onclick="switchView('archive')" class="w-full text-left text-lg font-semibold text-slate-700 hover:text-amber-600 border-b pb-2">🗄️ Archiv extrakcí</button></li>
             </ul>
             </div>
-            <button id="logoutBtn" class="w-full flex items-center justify-center space-x-2 text-rose-600 font-bold bg-rose-50 p-3 rounded-lg mt-8">
-                <span>Odhlásit se (<span id="loggedUserName"></span>)</span>
-            </button>
+            <div class="mt-8 space-y-2">
+                <div class="text-xs text-center text-slate-400 font-bold mb-2" id="loggedUserName"></div>
+                <div class="flex space-x-2">
+                    <button onclick="openSettingsModal()" class="w-1/2 flex items-center justify-center space-x-2 text-slate-600 font-bold bg-slate-100 p-3 rounded-lg hover:bg-slate-200 transition" title="Nastavení profilu">
+                        <span>⚙️ Nastavení</span>
+                    </button>
+                    <button id="logoutBtn" class="w-1/2 flex items-center justify-center space-x-2 text-rose-600 font-bold bg-rose-50 p-3 rounded-lg hover:bg-rose-100 transition" title="Odhlásit se">
+                        <span>🚪 Odejít</span>
+                    </button>
+                </div>
+            </div>
         </nav>
         <div id="menuOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden"></div>
 
@@ -395,6 +403,42 @@
                 </div>
             </div>
         </div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 modal-hidden modal-transition px-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h2 class="text-xl font-bold text-slate-800">Nastavení profilu</h2>
+                <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Přezdívka</label>
+                    <div class="flex space-x-2">
+                        <input type="text" id="setNickname" class="w-full border-gray-300 border rounded-lg p-2 text-sm bg-white">
+                        <button onclick="saveSettingsNickname()" class="bg-amber-600 text-white font-bold px-3 py-2 rounded-lg text-sm">Uložit</button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">E-mail</label>
+                    <div class="flex space-x-2">
+                        <input type="email" id="setEmail" class="w-full border-gray-300 border rounded-lg p-2 text-sm bg-white">
+                        <button onclick="saveSettingsEmail()" class="bg-amber-600 text-white font-bold px-3 py-2 rounded-lg text-sm">Změnit</button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">Nové heslo</label>
+                    <div class="flex space-x-2">
+                        <input type="password" id="setPassword" placeholder="••••••••" class="w-full border-gray-300 border rounded-lg p-2 text-sm bg-white">
+                        <button onclick="saveSettingsPassword()" class="bg-rose-600 text-white font-bold px-3 py-2 rounded-lg text-sm">Změnit</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -556,6 +600,58 @@
         function toggleMenu() { document.getElementById('mobileMenu').classList.toggle('menu-hidden'); document.getElementById('menuOverlay').classList.toggle('hidden'); }
         document.getElementById('menuBtn').addEventListener('click', toggleMenu); document.getElementById('menuOverlay').addEventListener('click', toggleMenu);
         
+        // --- SETTINGS ---
+        function openSettingsModal() {
+            if(!auth.currentUser) return;
+            document.getElementById('setNickname').value = getCurrentUser();
+            document.getElementById('setEmail').value = auth.currentUser.email;
+            document.getElementById('setPassword').value = '';
+            document.getElementById('settingsModal').classList.replace('modal-hidden', 'modal-visible');
+            if(!document.getElementById('mobileMenu').classList.contains('menu-hidden')) toggleMenu();
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.replace('modal-visible', 'modal-hidden');
+        }
+
+        function handleSettingsError(err) {
+            if (err.code === 'auth/requires-recent-login') {
+                alert('Z bezpečnostních důvodů se pro změnu e-mailu/hesla musíte odhlásit a znovu přihlásit.');
+            } else {
+                alert('Chyba: ' + err.message);
+            }
+        }
+
+        function saveSettingsNickname() {
+            const n = document.getElementById('setNickname').value.trim();
+            if(!n) return alert('Zadejte přezdívku.');
+            auth.currentUser.updateProfile({ displayName: n }).then(() => {
+                db.ref('userProfiles/' + currentUid).set({ username: n });
+                document.getElementById('loggedUserName').innerText = n;
+                document.getElementById('homeUserName').innerText = n;
+                alert('Přezdívka úspěšně změněna!');
+            }).catch(handleSettingsError);
+        }
+
+        function saveSettingsEmail() {
+            const e = document.getElementById('setEmail').value.trim();
+            if(!e) return alert('Zadejte e-mail.');
+            auth.currentUser.updateEmail(e).then(() => {
+                auth.currentUser.sendEmailVerification();
+                alert('E-mail byl změněn. Odeslali jsme na něj nový ověřovací odkaz. Prosím potvrďte jej.');
+                document.getElementById('emailWarningBanner').classList.remove('hidden');
+            }).catch(handleSettingsError);
+        }
+
+        function saveSettingsPassword() {
+            const p = document.getElementById('setPassword').value;
+            if(!p || p.length < 6) return alert('Zadejte nové heslo (min. 6 znaků).');
+            auth.currentUser.updatePassword(p).then(() => {
+                alert('Heslo úspěšně změněno!');
+                document.getElementById('setPassword').value = '';
+            }).catch(handleSettingsError);
+        }
+
         function switchView(view) {
             document.getElementById('viewHome').style.display = view === 'home' ? 'block' : 'none';
             document.getElementById('viewPrep').style.display = view === 'prep' ? 'block' : 'none';
