@@ -2,7 +2,7 @@
   "name": "Kávový Deník",
   "short_name": "Kávový Deník",
   "description": "Osobní deník pro nadšené kávičkáře – extrakce, kavárny, komunita.",
-  "start_url": "/index.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1c0a00",
   "theme_color": "#92400e",
