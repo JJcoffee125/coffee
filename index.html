@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kávový Deník 12.0</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#92400e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Kávový Deník">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -119,6 +124,8 @@
                         <span class="font-bold text-slate-700 text-sm text-center">Nový druh kávy</span>
                     </button>
                 </div>
+
+                <div id="homeStats" class="mb-6 bg-white rounded-2xl shadow-sm border border-slate-100 p-4"></div>
 
                 <div class="mb-4">
                     <h3 class="text-lg font-bold text-slate-700 mb-3">Poslední záznamy</h3>
@@ -534,6 +541,7 @@
         let communityBrews = [];
         let communityConsumed = [];
         let allUserProfiles = {};
+        let communityLikes = {};
 
         function loadUserData() {
             db.ref('userProfiles/' + currentUid).set({ username: getCurrentUser() });
@@ -544,8 +552,17 @@
             db.ref('users/' + currentUid + '/consumed').on('value', snap => { consumed = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderConsumed(); renderHomeFeed(); });
             db.ref('users/' + currentUid + '/following').on('value', snap => { following = snap.val() ? Object.values(snap.val()) : []; renderCommunity(); });
             
-            db.ref('community_brews').on('value', snap => { communityBrews = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderCommunity(); });
-            db.ref('community_consumed').on('value', snap => { communityConsumed = snap.val() ? Object.values(snap.val()).sort((a,b)=>b.id-a.id) : []; renderCommunity(); });
+            db.ref('community_brews').on('value', snap => {
+                const raw = snap.val() || {};
+                communityBrews = Object.entries(raw).map(([k,v]) => ({...v, _fbKey: k})).sort((a,b)=>b.id-a.id);
+                renderCommunity();
+            });
+            db.ref('community_consumed').on('value', snap => {
+                const raw = snap.val() || {};
+                communityConsumed = Object.entries(raw).map(([k,v]) => ({...v, _fbKey: k})).sort((a,b)=>b.id-a.id);
+                renderCommunity();
+            });
+            db.ref('community_likes').on('value', snap => { communityLikes = snap.val() || {}; renderCommunity(); });
 
             db.ref('roasters').on('value', snap => { 
                 if(snap.val()) roasters = Object.values(snap.val()); 
@@ -698,12 +715,16 @@
             document.getElementById('viewConsumed').style.display = view === 'consumed' ? 'block' : 'none';
             document.getElementById('viewCommunity').style.display = view === 'community' ? 'block' : 'none';
             
-            if(view === 'home') { document.getElementById('headerTitle').innerText = "Kávový Deník"; document.getElementById('homeUserName').innerText = getCurrentUser(); renderHomeFeed(); }
+            if(view === 'home') { document.getElementById('headerTitle').innerText = "Kávový Deník"; document.getElementById('homeUserName').innerText = getCurrentUser(); renderHomeFeed(); renderHomeStats(); }
             if(view === 'prep') { document.getElementById('headerTitle').innerText = "Příprava kávy"; refreshCoffeeSelect(); triggerMethodUpdate(); }
             if(view === 'coffees') { document.getElementById('headerTitle').innerText = "Číselník káv"; updateRoasterSelects(); renderCoffees(); }
             if(view === 'roasters') { document.getElementById('headerTitle').innerText = "Pražírny"; renderRoasters(); }
             if(view === 'archive') { document.getElementById('headerTitle').innerText = "Archiv extrakcí"; updateFilters(); renderBrews(); switchArchiveTab('brews'); }
-            if(view === 'consumed') { document.getElementById('headerTitle').innerText = "Káva venku"; }
+            if(view === 'consumed') {
+                document.getElementById('headerTitle').innerText = "Káva venku";
+                // Leaflet grey-tile fix: invalidate form map if already initialized
+                if(formMap) setTimeout(() => formMap.invalidateSize(), 150);
+            }
             if(view === 'community') { document.getElementById('headerTitle').innerText = "Kávičkáři"; renderCommunity(); }
             if(!document.getElementById('mobileMenu').classList.contains('menu-hidden')) toggleMenu();
         }
@@ -741,19 +762,31 @@
             const renderPost = (l) => {
                 const icon = l.isConsumed ? '🥤' : '☕';
                 const styleClass = l.isConsumed ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-800';
+                const col = l.isConsumed ? 'community_consumed' : 'community_brews';
+                const fbKey = l._fbKey || '';
+                const likesForPost = fbKey && communityLikes[fbKey] ? communityLikes[fbKey] : {};
+                const likeCount = Object.keys(likesForPost).length;
+                const iLiked = currentUid && !!likesForPost[currentUid];
                 return `
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center">
-                    <div class="flex items-center space-x-3 w-3/4">
-                        <div class="${styleClass} w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0">${icon}</div>
-                        <div class="truncate w-full">
-                            <div class="font-bold text-slate-800 text-sm truncate w-full">${l.authorName} <span class="text-[10px] font-normal text-slate-400 ml-1">připravil${l.isConsumed?'a v':''} ${l.isConsumed ? l.type : 'Kávu'}</span></div>
-                            <div class="text-[10px] text-slate-500 truncate w-full">${l.isConsumed ? l.location : l.method}</div>
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center space-x-3 w-3/4">
+                            <div class="${styleClass} w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0">${icon}</div>
+                            <div class="truncate w-full">
+                                <div class="font-bold text-slate-800 text-sm truncate w-full">${l.authorName} <span class="text-[10px] font-normal text-slate-400 ml-1">připravil${l.isConsumed?'a v':''} ${l.isConsumed ? l.type : 'Kávu'}</span></div>
+                                <div class="text-[10px] text-slate-500 truncate w-full">${l.isConsumed ? l.location : l.method}</div>
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0 w-1/4">
+                            <div class="text-[10px] text-slate-400 mb-1 whitespace-nowrap">${l.date.split(' ').slice(0, 3).join(' ')}</div>
+                            <div class="text-xs font-bold ${l.satisfaction >= 70 ? 'text-emerald-600' : (l.satisfaction <= 30 ? 'text-rose-600' : 'text-amber-600')}">${l.satisfaction}%</div>
                         </div>
                     </div>
-                    <div class="text-right shrink-0 w-1/4">
-                        <div class="text-[10px] text-slate-400 mb-1 whitespace-nowrap">${l.date.split(' ').slice(0, 3).join(' ')}</div>
-                        <div class="text-xs font-bold ${l.satisfaction >= 70 ? 'text-emerald-600' : (l.satisfaction <= 30 ? 'text-rose-600' : 'text-amber-600')}">${l.satisfaction}%</div>
-                    </div>
+                    ${fbKey ? `<div class="mt-2 pt-2 border-t border-slate-100 flex justify-end">
+                        <button onclick="toggleLike('${fbKey}')" class="flex items-center space-x-1 text-xs font-bold px-2 py-1 rounded-full transition ${iLiked ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-400'}">
+                            <span>${iLiked ? '❤️' : '🤍'}</span><span>${likeCount > 0 ? likeCount : ''}</span>
+                        </button>
+                    </div>` : ''}
                 </div>`;
             };
 
@@ -976,7 +1009,11 @@
             brews.unshift(brewData);
             saveDb('brews');
             if (brewData.visibility !== 'private') {
-                db.ref('community_brews').push({ ...brewData, authorUid: currentUid, authorName: getCurrentUser() });
+                const ref = db.ref('community_brews').push({ ...brewData, authorUid: currentUid, authorName: getCurrentUser() });
+                // Store firebase key back so edits/deletes can sync
+                brewData.firebaseKey = ref.key;
+                brews[0].firebaseKey = ref.key;
+                saveDb('brews');
             }
             document.getElementById('ratingModal').classList.replace('modal-visible','modal-hidden'); resetTimer(); switchView('archive');
         });
@@ -995,7 +1032,23 @@
                 brews[idx].doseIn = parseFloat(document.getElementById('ebDoseIn').value); brews[idx].ratio = parseFloat(document.getElementById('ebRatio').value); brews[idx].time = document.getElementById('ebTime').value;
                 brews[idx].bitter = parseInt(document.getElementById('ebBitter').value); brews[idx].acid = parseInt(document.getElementById('ebAcid').value); brews[idx].sweet = parseInt(document.getElementById('ebSweet').value);
                 brews[idx].body = parseInt(document.getElementById('ebBody').value); brews[idx].satisfaction = parseInt(document.getElementById('ebSatisfaction').value); brews[idx].notes = document.getElementById('ebNotes').value;
+                // Sync to community if a firebaseKey exists
+                if(brews[idx].firebaseKey) {
+                    const upd = { doseIn: brews[idx].doseIn, ratio: brews[idx].ratio, time: brews[idx].time, bitter: brews[idx].bitter, acid: brews[idx].acid, sweet: brews[idx].sweet, body: brews[idx].body, satisfaction: brews[idx].satisfaction, notes: brews[idx].notes };
+                    db.ref('community_brews/' + brews[idx].firebaseKey).update(upd);
+                }
                 saveDb('brews'); document.getElementById('editBrewModal').classList.replace('modal-visible', 'modal-hidden'); renderBrews();
+            }
+        }
+
+        function deleteBrew(id) {
+            if(!confirm('Smazat tento záznam?')) return;
+            const idx = brews.findIndex(b => b.id === id);
+            if(idx > -1) {
+                if(brews[idx].firebaseKey) db.ref('community_brews/' + brews[idx].firebaseKey).remove();
+                brews.splice(idx, 1);
+                saveDb('brews');
+                renderBrews();
             }
         }
 
@@ -1057,7 +1110,11 @@
                     </div>
                     ${l.notes ? `<div class="mt-2 text-sm text-slate-600 italic px-1">"${l.notes}"</div>` : ''}
                     <div class="mt-4 flex justify-between items-center text-xs text-slate-400 border-t pt-2">
-                        <span>${l.date}</span><button onclick="openEditBrew(${l.id})" class="text-amber-600 font-semibold px-2 py-1 rounded bg-amber-50">✏️ Upravit</button>
+                        <span>${l.date}</span>
+                        <div class="flex gap-2">
+                            <button onclick="openEditBrew(${l.id})" class="text-amber-600 font-semibold px-2 py-1 rounded bg-amber-50">✏️ Upravit</button>
+                            <button onclick="deleteBrew(${l.id})" class="text-rose-500 font-semibold px-2 py-1 rounded bg-rose-50">🗑️</button>
+                        </div>
                     </div>
                 </div>`;
             });
@@ -1193,7 +1250,10 @@
             consumed.unshift(consData);
             saveDb('consumed');
             if (consData.visibility !== 'private') {
-                db.ref('community_consumed').push({ ...consData, authorUid: currentUid, authorName: getCurrentUser() });
+                const ref = db.ref('community_consumed').push({ ...consData, authorUid: currentUid, authorName: getCurrentUser() });
+                consData.firebaseKey = ref.key;
+                consumed[0].firebaseKey = ref.key;
+                saveDb('consumed');
             }
             document.getElementById('consumedLocation').value = '';
             document.getElementById('consNotes').value = '';
@@ -1258,7 +1318,11 @@
                     </div>
                     ${l.notes ? `<div class="mt-2 text-sm text-slate-600 italic px-1">"${l.notes}"</div>` : ''}
                     <div class="mt-4 flex justify-between items-center text-xs text-slate-400 border-t pt-2">
-                        <span>${l.date}</span><button onclick="openEditConsumed(${l.id})" class="text-blue-600 font-semibold px-2 py-1 rounded bg-blue-50">✏️ Upravit</button>
+                        <span>${l.date}</span>
+                        <div class="flex gap-2">
+                            <button onclick="openEditConsumed(${l.id})" class="text-blue-600 font-semibold px-2 py-1 rounded bg-blue-50">✏️ Upravit</button>
+                            <button onclick="deleteConsumed(${l.id})" class="text-rose-500 font-semibold px-2 py-1 rounded bg-rose-50">🗑️</button>
+                        </div>
                     </div>
                 </div>`;
             });
@@ -1290,13 +1354,99 @@
                 consumed[idx].body = parseInt(document.getElementById('econsBody').value);
                 consumed[idx].satisfaction = parseInt(document.getElementById('econsSatisfaction').value);
                 consumed[idx].notes = document.getElementById('econsNotes').value;
+                // Sync to community if a firebaseKey exists
+                if(consumed[idx].firebaseKey) {
+                    const upd = { type: consumed[idx].type, location: consumed[idx].location, bitter: consumed[idx].bitter, acid: consumed[idx].acid, sweet: consumed[idx].sweet, body: consumed[idx].body, satisfaction: consumed[idx].satisfaction, notes: consumed[idx].notes };
+                    db.ref('community_consumed/' + consumed[idx].firebaseKey).update(upd);
+                }
                 saveDb('consumed');
                 document.getElementById('editConsumedModal').classList.replace('modal-visible', 'modal-hidden');
                 renderConsumed();
             }
         }
 
+        function deleteConsumed(id) {
+            if(!confirm('Smazat tento záznam?')) return;
+            const idx = consumed.findIndex(c => c.id === id);
+            if(idx > -1) {
+                if(consumed[idx].firebaseKey) db.ref('community_consumed/' + consumed[idx].firebaseKey).remove();
+                consumed.splice(idx, 1);
+                saveDb('consumed');
+                renderConsumed();
+            }
+        }
+
+        function toggleLike(fbKey) {
+            if(!currentUid) return;
+            const ref = db.ref('community_likes/' + fbKey + '/' + currentUid);
+            ref.once('value').then(snap => {
+                if(snap.exists()) ref.remove();
+                else ref.set(true);
+            });
+        }
+
+        // --- STATISTIKY ---
+        function renderHomeStats() {
+            const el = document.getElementById('homeStats'); if(!el) return;
+            const now = new Date();
+            const weekAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+
+            const brewsThisWeek = brews.filter(b => parseCzechDate(b.date) >= weekAgo).length;
+            const consumedThisWeek = consumed.filter(c => parseCzechDate(c.date) >= weekAgo).length;
+            const totalAll = brews.length + consumed.length;
+
+            // Nejčastější metoda
+            const methodCount = {};
+            brews.forEach(b => { if(b.method) methodCount[b.method] = (methodCount[b.method]||0)+1; });
+            const topMethod = Object.keys(methodCount).sort((a,b)=>methodCount[b]-methodCount[a])[0] || null;
+
+            // Nejčastější káva
+            const coffeeCount = {};
+            brews.forEach(b => {
+                const c = coffees.find(x => x.id === b.coffeeId);
+                if(c) coffeeCount[c.name] = (coffeeCount[c.name]||0)+1;
+            });
+            const topCoffee = Object.keys(coffeeCount).sort((a,b)=>coffeeCount[b]-coffeeCount[a])[0] || null;
+
+            // Průměrná spokojenost
+            const allEntries = [...brews, ...consumed].filter(e => e.satisfaction != null);
+            const avgSat = allEntries.length ? Math.round(allEntries.reduce((s,e)=>s+e.satisfaction,0)/allEntries.length) : null;
+
+            if(totalAll === 0) { el.innerHTML = '<div class="text-center text-slate-400 text-sm py-2">Přidejte první záznam a uvidíte statistiky.</div>'; return; }
+
+            el.innerHTML = `
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">📊 Váš týden v číslech</div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-amber-50 rounded-xl p-3 text-center">
+                        <div class="text-2xl font-black text-amber-700">${brewsThisWeek}</div>
+                        <div class="text-[10px] text-amber-600 font-bold uppercase">Příprav doma</div>
+                    </div>
+                    <div class="bg-blue-50 rounded-xl p-3 text-center">
+                        <div class="text-2xl font-black text-blue-600">${consumedThisWeek}</div>
+                        <div class="text-[10px] text-blue-500 font-bold uppercase">Káv venku</div>
+                    </div>
+                    ${avgSat !== null ? `<div class="bg-emerald-50 rounded-xl p-3 text-center">
+                        <div class="text-2xl font-black text-emerald-600">${avgSat}%</div>
+                        <div class="text-[10px] text-emerald-500 font-bold uppercase">Průměr. spokojenost</div>
+                    </div>` : ''}
+                    <div class="bg-slate-50 rounded-xl p-3 text-center">
+                        <div class="text-2xl font-black text-slate-600">${totalAll}</div>
+                        <div class="text-[10px] text-slate-500 font-bold uppercase">Záznamů celkem</div>
+                    </div>
+                </div>
+                ${topMethod ? `<div class="mt-3 text-xs text-slate-500">☕ Oblíbená metoda: <strong class="text-slate-700">${topMethod}</strong></div>` : ''}
+                ${topCoffee ? `<div class="text-xs text-slate-500 mt-1">🫘 Nejčastější káva: <strong class="text-slate-700">${topCoffee}</strong></div>` : ''}
+            `;
+        }
+
         checkAuth();
+
+        // --- SERVICE WORKER (PWA) ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
     </script>
 </body>
 </html>

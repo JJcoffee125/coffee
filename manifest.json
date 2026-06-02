@@ -1,13 +1,21 @@
 {
   "name": "Kávový Deník",
-  "short_name": "Káva",
-  "start_url": "./index.html",
+  "short_name": "Kávový Deník",
+  "description": "Osobní deník pro nadšené kávičkáře – extrakce, kavárny, komunita.",
+  "start_url": "/index.html",
   "display": "standalone",
-  "background_color": "#f8fafc",
+  "background_color": "#1c0a00",
   "theme_color": "#92400e",
+  "orientation": "portrait",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/924/924514.png",
+      "src": "Kávový Deníček Coffee Journal Logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "Kávový Deníček Coffee Journal Logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
